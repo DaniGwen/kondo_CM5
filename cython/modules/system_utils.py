@@ -3,6 +3,8 @@ import asyncio
 from gpiozero import LED
 from modules import distance_sensor
 from modules.config import *
+import warnings
+warnings.filterwarnings("ignore", module="gpiozero")
 
 # Global LED object
 _status_led = None
