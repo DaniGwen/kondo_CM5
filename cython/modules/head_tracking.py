@@ -52,17 +52,16 @@ class MicroServo:
     def __init__(self, gpio, state_ref):
         self.gpio = gpio
         self.state = state_ref
-        
-        # Initialize with standard microservo timing bounds (0.5ms to 2.5ms)
         self.servo = Servo(gpio, min_pulse_width=0.0005, max_pulse_width=0.0025)
         self.set_us(TILT_CENTER)
+        
+        # Give it a moment to reach center on boot, then instantly detach to prevent jitter
+        time.sleep(0.2)
+        self.servo.detach()
 
     def set_us(self, us):
         self.state["current_tilt"] = us
-        # Clamp min to 500 and max to 2500 safely
         us = max(500, min(2500, int(us)))
-        
-        # Map microseconds (500 to 2500) to gpiozero's (-1.0 to 1.0) value range
         mapped_value = (us - 1500) / 1000.0
         self.servo.value = mapped_value
 
@@ -77,7 +76,10 @@ class MicroServo:
         for us in rng:
             self.set_us(us)
             time.sleep(delay)
+            
         self.set_us(target_us)
+        time.sleep(0.1) # Allow physical motor to catch up to final signal
+        self.servo.detach() # Cut the PWM signal to freeze position and stop twitching
 
     def center(self):
         if self.state.get("is_sitting", False):
@@ -86,7 +88,6 @@ class MicroServo:
             self.sweep_to(TILT_CENTER)
 
     def stop(self):
-        """Stops the PWM signal (Torque OFF for Tilt Servo)."""
         self.servo.detach()
 
 
