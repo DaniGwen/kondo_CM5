@@ -4,7 +4,8 @@ import time
 
 # Hardware Libraries
 from pykondo import Kondo
-from aiymakerkit import vision
+import vision
+from vision import VisionBridge
 import models
 
 # Custom Modules
@@ -97,8 +98,8 @@ async def idle_manager_task(mc, ms):
 
 async def detect_logic(mc, ms):
     print(f"{COLOR_MAGENTA}Loading Multi-Object Vision Model...{COLOR_RESET}")
-    detector = vision.Detector(models.OBJECT_DETECTION_MODEL)
-    frames = vision.get_frames(size=CAMERA_RESOLUTION)
+    detector = VisionBridge(models.OBJECT_DETECTION_MODEL)
+    frames = detector.get_frames(size=CAMERA_RESOLUTION)
     
     label_map = load_labels(models.OBJECT_DETECTION_LABELS) 
     print(f"{COLOR_MAGENTA}Multi-Object Vision System Ready. (Tracking Debug: ON){COLOR_RESET}")
@@ -136,7 +137,7 @@ async def detect_logic(mc, ms):
                 await asyncio.sleep(1.0) 
                 
                 # Reboot the AIY camera generator
-                frames = vision.get_frames(size=CAMERA_RESOLUTION)
+                frames = detector.get_frames(size=CAMERA_RESOLUTION)
                 continue
 
             all_objects = detector.get_objects(frame, threshold=0.2)
