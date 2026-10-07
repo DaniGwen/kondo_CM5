@@ -1,13 +1,13 @@
 import time
 import asyncio
-import pigpio
+from gpiozero import Servo
 
 # --- Constants ---
 
 # Kondo Servo (Pan)
 SERVO_ID_HEAD_PAN = 0
 
-# STANDARD LIMITS (Use 45 for main script, override in gesture script)
+# STANDARD LIMITS
 PAN_LIMIT_RIGHT = -41
 PAN_LIMIT_LEFT = 45
 
@@ -22,9 +22,8 @@ TILT_UP = 580
 TILT_DOWN = 880
 
 # --- SITTING TILT SETTINGS ---
-# When sitting, "Center" should be higher to look at people
-TILT_CENTER_SITTING = 600  # Higher than standing center
-TILT_UP_SITTING = 500  # Max Up (Limit to 500 for pigpio safety)
+TILT_CENTER_SITTING = 600  
+TILT_UP_SITTING = 500  
 
 # Servo Sweep Settings
 SWEEP_STEP = 40
@@ -44,36 +43,32 @@ TRACKING_DEADZONE = 0.04
 MAX_PAN_STEP = 9.0
 # ====================================
 
+
 # --- Classes ---
 
-
 class MicroServo:
-    """Controls the Tilt Servo using pigpio."""
+    """Controls the Tilt Servo using modern gpiozero for CM5 compatibility."""
 
     def __init__(self, gpio, state_ref):
         self.gpio = gpio
         self.state = state_ref
-        self.pi = pigpio.pi()
-        if not self.pi.connected:
-            raise RuntimeError("pigpio not running; start pigpiod")
+        
+        # Initialize with standard microservo timing bounds (0.5ms to 2.5ms)
+        self.servo = Servo(gpio, min_pulse_width=0.0005, max_pulse_width=0.0025)
         self.set_us(TILT_CENTER)
 
     def set_us(self, us):
         self.state["current_tilt"] = us
-        # Clamp min to 500 to prevent pigpio crash
+        # Clamp min to 500 and max to 2500 safely
         us = max(500, min(2500, int(us)))
-        self.pi.set_servo_pulsewidth(self.gpio, us)
+        
+        # Map microseconds (500 to 2500) to gpiozero's (-1.0 to 1.0) value range
+        mapped_value = (us - 1500) / 1000.0
+        self.servo.value = mapped_value
 
     def sweep_to(self, target_us, step=SWEEP_STEP, delay=SWEEP_DELAY):
-        try:
-            current = self.pi.get_servo_pulsewidth(self.gpio)
-        except pigpio.error:
-            current = 0
-        if current == 0:
-            current = TILT_CENTER
-            self.set_us(current)
+        current = self.state.get("current_tilt", TILT_CENTER)
 
-        # Determine direction
         if current < target_us:
             rng = range(int(current), int(target_us) + 1, abs(int(step)))
         else:
@@ -85,7 +80,6 @@ class MicroServo:
         self.set_us(target_us)
 
     def center(self):
-        # Center based on current posture
         if self.state.get("is_sitting", False):
             self.sweep_to(TILT_CENTER_SITTING)
         else:
@@ -93,7 +87,7 @@ class MicroServo:
 
     def stop(self):
         """Stops the PWM signal (Torque OFF for Tilt Servo)."""
-        self.pi.set_servo_pulsewidth(self.gpio, 0)
+        self.servo.detach()
 
 
 class HeadBehavior:
@@ -114,7 +108,6 @@ class HeadBehavior:
         self.kondo.set_angle(SERVO_ID_HEAD_PAN, angle, speed)
 
     async def _wait(self, duration):
-        """Async sleep that returns False if we should stop (event cleared)."""
         end = time.time() + duration
         while time.time() < end:
             if not self.event.is_set():
@@ -122,14 +115,12 @@ class HeadBehavior:
             await asyncio.sleep(0.1)
         return True
 
-    # --- Dynamic Tilt Helpers ---
     def get_tilt_up(self):
         return TILT_UP_SITTING if self.state["is_sitting"] else TILT_UP
 
     def get_tilt_center(self):
         return TILT_CENTER_SITTING if self.state["is_sitting"] else TILT_CENTER
 
-    # --- Look Routines ---
     async def look_left_up(self):
         if not self.event.is_set():
             return False
@@ -166,83 +157,58 @@ class HeadBehavior:
         return await self._wait(0.5)
 
     async def check_environment(self):
-        """Runs scan cycle. Modified to look mainly UP when sitting."""
-
-        # --- SITTING SCAN PATTERN (Look Up/High) ---
         if self.state["is_sitting"]:
-            # Left High
-            if not await self.look_left_up():
-                return False
-
-            # Center High
-            if not await self.center():
-                return False
-
-            # Right High
-            if not await self.look_right_up():
-                return False
-
-            # Center High
-            if not await self.center():
-                return False
-
+            if not await self.look_left_up(): return False
+            if not await self.center(): return False
+            if not await self.look_right_up(): return False
+            if not await self.center(): return False
             return True
-
-        # --- STANDING SCAN PATTERN (Full Range) ---
         else:
-            if not await self.look_left_up():
-                return False
-            if not await self.look_left_down():
-                return False
-            if not await self.center():
-                return False
-            if not await self.look_right_up():
-                return False
-            if not await self.look_right_down():
-                return False
-            if not await self.center():
-                return False
+            if not await self.look_left_up(): return False
+            if not await self.look_left_down(): return False
+            if not await self.center(): return False
+            if not await self.look_right_up(): return False
+            if not await self.look_right_down(): return False
+            if not await self.center(): return False
             return True
 
 
 # --- Tracking Logic ---
 
 def track_face(kondo, ms, face, frame_width, frame_height, state):
-    """Calculates error and moves servos to center the face."""
-    # 1. Safely drop stale frames right after we stop scanning
     if state.get("skip_frames", 0) > 0:
         state["skip_frames"] -= 1
         return False
 
-    # 2. Log the time we saw the face so the distance sensor backs off
     state["last_face_seen"] = time.time()
     
-    # 3. Internal Rate Limiter (Max ~20 servo updates per second)
     now = time.time()
     if now - state.get("last_track_time", 0) < 0.19:
         return False  
     state["last_track_time"] = now
 
-    if hasattr(face, "bbox"):
-        box = face.bbox
-        abs_cx = box.xmin + (box.xmax - box.xmin) / 2
-        abs_cy = box.ymin + (box.ymax - box.ymin) / 2
+    if hasattr(face, "bbox") and face.bbox:
+        # Check if bbox is the new OpenCV tuple (x, y, w, h) or legacy object
+        if isinstance(face.bbox, tuple):
+            x, y, w, h = face.bbox
+            abs_cx = x + (w / 2.0)
+            abs_cy = y + (h / 2.0)
+        else:
+            box = face.bbox
+            abs_cx = box.xmin + (box.xmax - box.xmin) / 2
+            abs_cy = box.ymin + (box.ymax - box.ymin) / 2
     else:
         return False
 
-    # Normalize (0.0 - 1.0)
     cx = abs_cx / frame_width
     cy = abs_cy / frame_height
 
-    # Calculate Error (Target is 0.5)
     error_x = 0.5 - cx
     error_y = 0.5 - cy
 
-    # Calculate Movement
     pan_change = (error_x * TRACKING_GAIN_PAN) * TRACKING_DIRECTION
     tilt_change = -1 * (error_y * (TRACKING_GAIN_TILT / 2))
 
-    # Speed Limiter
     if pan_change > MAX_PAN_STEP:
         pan_change = MAX_PAN_STEP
     elif pan_change < -MAX_PAN_STEP:
@@ -250,31 +216,21 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
 
     moved = False
 
-    # Pan Update
     if abs(error_x) > TRACKING_DEADZONE:
         current_pan = state["current_pan"]
         new_pan = current_pan + pan_change
-
-        # Clamp to limits
         new_pan = max(PAN_LIMIT_RIGHT, min(PAN_LIMIT_LEFT, new_pan))
 
         if DEBUG_TRACKING:
-            print(
-                f"[TRACK] NormX: {cx:.2f} | Err: {error_x:.2f} | Pan: {current_pan:.1f} -> {new_pan:.1f}"
-            )
+            print(f"[TRACK] NormX: {cx:.2f} | Err: {error_x:.2f} | Pan: {current_pan:.1f} -> {new_pan:.1f}")
 
         state["current_pan"] = new_pan
         kondo.set_angle(SERVO_ID_HEAD_PAN, new_pan, PAN_SPEED_FAST)
         moved = True
-    else:
-        if DEBUG_TRACKING and abs(error_x) > 0.01:
-            print(f"[TRACK] Locked On. Err: {error_x:.2f}")
 
-    # Tilt Update
     if abs(error_y) > TRACKING_DEADZONE:
         new_tilt = state["current_tilt"] + tilt_change
         new_tilt = max(TILT_UP, min(TILT_DOWN, new_tilt))
-        # Fixed 500 limit
         new_tilt = max(500, new_tilt)
 
         ms.set_us(new_tilt)
