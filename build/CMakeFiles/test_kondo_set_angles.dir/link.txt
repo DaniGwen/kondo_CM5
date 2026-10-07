@@ -1,0 +1,1 @@
+/usr/bin/c++  -pthread -std=c++11 -fPIC -O3 -DNDEBUG  -rdynamic CMakeFiles/test_kondo_set_angles.dir/utils/test_kondo_set_angles.cpp.o CMakeFiles/test_kondo_set_angles.dir/src/ics.cpp.o CMakeFiles/test_kondo_set_angles.dir/src/kondo.cpp.o  -o test_kondo_set_angles  -lftdi 

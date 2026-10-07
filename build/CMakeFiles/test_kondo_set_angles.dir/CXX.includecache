@@ -1,0 +1,40 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/kondo.h
+stdio.h
+-
+assert.h
+-
+string.h
+-
+ctype.h
+-
+sys/time.h
+-
+iostream
+-
+vector
+-
+math.h
+-
+unistd.h
+-
+stdlib.h
+-
+ftdi.h
+../include/ftdi.h
+
+/home/pi/Desktop/kondo c++/khr3hv-master/src/kondo.cpp
+kondo.h
+/home/pi/Desktop/kondo c++/khr3hv-master/src/kondo.h
+
+/home/pi/Desktop/kondo c++/khr3hv-master/utils/test_kondo_set_angles.cpp
+kondo.h
+/home/pi/Desktop/kondo c++/khr3hv-master/utils/kondo.h
+

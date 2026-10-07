@@ -1,0 +1,6 @@
+/home/pi/Desktop/kondo c++/khr3hv-master/build/CMakeFiles/edit_cache.dir
+/home/pi/Desktop/kondo c++/khr3hv-master/build/CMakeFiles/test_kondo_set_angles.dir
+/home/pi/Desktop/kondo c++/khr3hv-master/build/CMakeFiles/test_kondo_set_angle.dir
+/home/pi/Desktop/kondo c++/khr3hv-master/build/CMakeFiles/rebuild_cache.dir
+/home/pi/Desktop/kondo c++/khr3hv-master/build/CMakeFiles/kondo.dir
+/home/pi/Desktop/kondo c++/khr3hv-master/build/CMakeFiles/test_kondo_move.dir

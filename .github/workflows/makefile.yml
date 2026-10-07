@@ -1,0 +1,64 @@
+name: C++ Linux Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-latest # Using Ubuntu for Linux build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install libjpeg-dev
+      run: sudo apt-get install -y libjpeg-dev
+
+    - name: install cmake
+      run: sudo apt install cmake
+      
+    - name: install cython
+      run: sudo apt install cython3
+
+    - name: install libftdi-dev
+      run: sudo apt-get install libftdi-dev
+
+    - name: install libusb-1.0-0-dev
+      run: sudo apt install libusb-1.0-0-dev
+
+    - name: install python3-opencv
+      run: sudo apt install python3-opencv
+
+    - name: install python3-opencv
+      run: sudo apt install python3-opencv
+
+    - name:  install pycoral
+      run: pip3 install pycoral
+
+    - name:  install -y libedgetpu1-std
+      run: sudo apt install -y libedgetpu1-std
+		
+    - name: clean up build
+      working-directory: ./
+      run: find . -name "*.o" -type f -delete
+
+    - name: Build Project with Make
+      working-directory: ./Kondo-KHR-3HV/build
+      run: make clean && make
+
+    - name: Build react_on_object_detect
+      working-directory: ./Kondo-KHR-3HV/cython
+      run: python3 setup.py build_ext --inplace
+      
+    - name: Create and Upload Main Project Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: kondo-main-build-linux
+        path: ./Kondo-KHR-3HV/build
+
+  

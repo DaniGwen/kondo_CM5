@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -pthread -std=c++11 -fPIC -O3 -DNDEBUG  -shared -Wl,-soname,libkondo.so -o libkondo.so CMakeFiles/kondo.dir/src/ics.cpp.o CMakeFiles/kondo.dir/src/kondo.cpp.o  -lftdi 
