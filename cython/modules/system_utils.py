@@ -1,53 +1,46 @@
 import time
 import asyncio
-import shutil
-import subprocess
-import RPi.GPIO as GPIO
+from gpiozero import LED
 from modules import distance_sensor
 from modules.config import *
 
-def ensure_pigpiod(start_timeout=2.0):
-    """Checks if the pigpio daemon is running, and starts it if not."""
-    try:
-        subprocess.check_call(["pgrep", "pigpiod"], stdout=subprocess.DEVNULL)
-        return True
-    except subprocess.CalledProcessError:
-        pass
+# Global LED object
+_status_led = None
 
-    print("Starting pigpiod...")
-    pigpiod_path = shutil.which("pigpiod")
-    if pigpiod_path:
-        subprocess.Popen(
-            ["sudo", pigpiod_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        time.sleep(start_timeout)
-        return True
-    return False
+def ensure_pigpiod(start_timeout=2.0):
+    """Deprecated on CM5 architecture. Left intact so legacy scripts do not crash."""
+    return True
 
 def setup_gpio():
-    """Initializes standard Raspberry Pi GPIO pins."""
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
+    """Initializes standard Raspberry Pi GPIO pins using modern gpiozero."""
+    global _status_led
     
-    # Setup LED
-    GPIO.setup(LED_PIN, GPIO.OUT)
-    GPIO.output(LED_PIN, GPIO.HIGH)
+    if _status_led is None:
+        # Setup LED and set it HIGH (True) immediately
+        _status_led = LED(LED_PIN, initial_value=True)
     
     # Initialize Distance Sensor from module
     distance_sensor.init_sensor(TRIG_PIN, ECHO_PIN)
 
 def cleanup_gpio(ms=None):
     """Safely shuts down servos and cleans up GPIO pins."""
+    global _status_led
     if ms:
         ms.stop()
-    GPIO.cleanup()
+    if _status_led:
+        _status_led.close()
+        _status_led = None
 
 async def blink_led(duration=3):
     """Asynchronously blinks the LED for a given duration."""
+    global _status_led
+    if not _status_led:
+        return
+        
     end_time = time.monotonic() + duration
     while time.monotonic() < end_time:
-        GPIO.output(LED_PIN, GPIO.LOW)
+        _status_led.off()
         await asyncio.sleep(0.1)
-        GPIO.output(LED_PIN, GPIO.HIGH)
+        _status_led.on()
         await asyncio.sleep(0.1)
-    GPIO.output(LED_PIN, GPIO.HIGH)
+    _status_led.on()
