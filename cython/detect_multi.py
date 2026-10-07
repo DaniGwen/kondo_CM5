@@ -247,7 +247,8 @@ async def detect_logic(mc, ms):
 
 async def main():
     print(f"{COLOR_MAGENTA}--- Robot Control System Init (Multi-Target Mode) ---{COLOR_RESET}")
-    if not system_utils.ensure_pigpiod(): sys.exit(1)
+    
+    # We removed ensure_pigpiod() because we upgraded to gpiozero!
     system_utils.setup_gpio()
 
     ms = head_tracking.MicroServo(TILT_SERVO_PIN, state)
@@ -275,17 +276,10 @@ async def main():
     )
     
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(main())
+        # Modern asyncio execution
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("\nStopping...")
-        for task in asyncio.all_tasks(loop):
-            task.cancel()
-        try:
-            loop.run_until_complete(asyncio.sleep(0.1))
-        except asyncio.CancelledError:
-            pass
     finally:
         system_utils.cleanup_gpio()
-        loop.close()
