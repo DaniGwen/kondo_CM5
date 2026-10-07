@@ -34,5 +34,5 @@ CLASSIFICATION_IMPRINTING_MODEL = path('mobilenet_v1_1.0_224_l2norm_quant_edgetp
 MOVENET_MODEL = path('movenet_single_pose_lightning_ptq_edgetpu.tflite')
 
 # Labels
-CLASSIFICATION_LABELS = path('imagenet_labels.txt')
-OBJECT_DETECTION_LABELS = path('coco_labels.txt')
+CLASSIFICATION_LABELS = path('models/imagenet_labels.txt')
+OBJECT_DETECTION_LABELS = path('models/coco_labels.txt')
