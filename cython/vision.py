@@ -58,6 +58,9 @@ def draw_objects(frame, objects, labels=None):
             thickness, 
             cv2.LINE_AA
         )
+        
+    cv2.imshow("Robot Vision Feed", frame)
+    cv2.waitKey(1)
 
 
 class VisionBridge:
