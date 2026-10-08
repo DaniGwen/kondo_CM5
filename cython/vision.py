@@ -79,7 +79,8 @@ class VisionBridge:
 
     def get_frames(self, size=(640, 480), camera_index=0):
         """Camera generator supporting the size parameter."""
-        cap = cv2.VideoCapture(camera_index)
+        # Force V4L2 backend to prevent GStreamer memory crashes
+        cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
         
         if isinstance(size, (tuple, list)) and len(size) == 2:
             width, height = size
@@ -87,6 +88,8 @@ class VisionBridge:
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(height))
             
         cap.set(cv2.CAP_PROP_FPS, 30)
+        # Restrict buffer to 1 frame so the AI always processes the absolute newest image
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         try:
             while cap.isOpened():
