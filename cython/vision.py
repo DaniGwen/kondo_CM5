@@ -143,4 +143,4 @@ class VisionBridge:
                     score=score
                 ))
 
-        return objects
+        return objects 
