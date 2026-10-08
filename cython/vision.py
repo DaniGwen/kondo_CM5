@@ -17,48 +17,50 @@ class ObjectDetection:
 
 def draw_objects(frame, objects, labels=None):
     """Draws bounding boxes and class labels directly onto the OpenCV frame."""
-    if frame is None or not objects:
+    if frame is None:
         return
 
-    for obj in objects:
-        bbox = getattr(obj, "bbox", getattr(obj, "bounding_box", None))
-        if not bbox:
-            continue
+    # Only try to draw boxes if objects actually exist
+    if objects:
+        for obj in objects:
+            bbox = getattr(obj, "bbox", getattr(obj, "bounding_box", None))
+            if not bbox:
+                continue
 
-        x, y, w, h = bbox
-        label_id = getattr(obj, "id", None)
-        score = getattr(obj, "score", 0.0)
+            x, y, w, h = bbox
+            label_id = getattr(obj, "id", None)
+            score = getattr(obj, "score", 0.0)
 
-        label_name = labels.get(label_id, str(label_id)) if labels else str(label_id)
-        display_text = f"{label_name}: {score:.2f}"
+            label_name = labels.get(label_id, str(label_id)) if labels else str(label_id)
+            display_text = f"{label_name}: {score:.2f}"
 
-        # Draw bounding box
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # Draw bounding box
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        # Draw label background and text
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.5
-        thickness = 1
-        (tw, th), baseline = cv2.getTextSize(display_text, font, font_scale, thickness)
-        
-        cv2.rectangle(
-            frame, 
-            (x, max(0, y - th - baseline - 4)), 
-            (x + tw, max(0, y)), 
-            (0, 255, 0), 
-            -1
-        )
-        cv2.putText(
-            frame, 
-            display_text, 
-            (x, max(0, y - 4)), 
-            font, 
-            font_scale, 
-            (0, 0, 0), 
-            thickness, 
-            cv2.LINE_AA
-        )
-        
+            # Draw label background and text
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.5
+            thickness = 1
+            (tw, th), baseline = cv2.getTextSize(display_text, font, font_scale, thickness)
+            
+            cv2.rectangle(
+                frame, 
+                (x, max(0, y - th - baseline - 4)), 
+                (x + tw, max(0, y)), 
+                (0, 255, 0), 
+                -1
+            )
+            cv2.putText(
+                frame, 
+                display_text, 
+                (x, max(0, y - 4)), 
+                font, 
+                font_scale, 
+                (0, 0, 0), 
+                thickness, 
+                cv2.LINE_AA
+            )
+
     cv2.imshow("Robot Vision Feed", frame)
     cv2.waitKey(1)
 
