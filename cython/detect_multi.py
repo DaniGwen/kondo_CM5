@@ -23,7 +23,7 @@ rotate_head_event = asyncio.Event()
 
 # Shared State
 state = {
-    "last_face_seen_time": time.time(), # Keeping this name so behaviors.py stays happy!
+    "last_face_seen_time": time.time(),
     "last_motion_time": 0,
     "is_sitting": False,
     "wave_played": False,
@@ -33,10 +33,8 @@ state = {
     "current_tilt": head_tracking.TILT_CENTER,
     "return_steps_pending": 0,
     
-    # --- NEW: THE ATTENTION HIERARCHY ---
-    # The robot will track the first object it finds on this list.
-    # If it sees a person and a bottle, it will ignore the person and track the bottle!
-    "target_priorities": ["sports ball", "bottle", "person"]
+    # STRICT FILTER: The robot will only track humans.
+    "target_priorities": ["person"]
 }
 
 def load_labels(file_path):
@@ -48,12 +46,10 @@ def load_labels(file_path):
                 line = line.strip()
                 if not line: continue
                 
-                # Check if the line starts with a number (e.g., "0 person")
                 parts = line.split(' ', 1)
                 if parts[0].isdigit():
                     labels[int(parts[0])] = parts[1].lower()
                 else:
-                    # Otherwise, assume line-by-line index (e.g., Line 0 = "person")
                     labels[i] = line.lower()
                     
         print(f"Loaded {len(labels)} classes from {file_path}")
@@ -115,7 +111,6 @@ async def detect_logic(mc, ms):
         except Exception:
           pass
         
-        # Give the motors a full second to move into position before opening the camera
         await asyncio.sleep(1.0)
     
         while True:
@@ -130,53 +125,33 @@ async def detect_logic(mc, ms):
                 await asyncio.sleep(0.01)
                 continue
             except Exception as e:
-                # --- FIX 2: THE AIY MAKER KIT WATCHDOG ---
                 print(f"{COLOR_RED}[ERROR] Camera feed dropped! Reconnecting...{COLOR_RESET}")
-                
-                # Give the hardware a second to clear the bus
                 await asyncio.sleep(1.0) 
-                
-                # Reboot the AIY camera generator
                 frames = detector.get_frames(size=CAMERA_RESOLUTION)
                 continue
 
             all_objects = detector.get_objects(frame, threshold=0.2)
             dist = state["distance_cm"]
             rcb4_sensor_reader.update_foot_sensors(mc, state)
-            active_target = None
-            active_target_name = ""
             
+            tracking_target = None
+            tracking_target_name = ""
+            
+            # STRICT FILTER: Only lock onto targets explicitly in the priority list
             for priority_label in state["target_priorities"]:
                 for obj in all_objects:
                     obj_id = getattr(obj, 'id', None)
                     detected_name = label_map.get(obj_id, getattr(obj, 'label', '')).lower()
                     
                     if detected_name == priority_label.lower():
-                        active_target = obj
-                        active_target_name = detected_name 
+                        tracking_target = obj
+                        tracking_target_name = detected_name 
                         break 
-                if active_target: break
-
-            unknown_target = None
-            unknown_target_name = ""
-            if not active_target:
-                for obj in all_objects:
-                    obj_id = getattr(obj, 'id', None)
-                    detected_name = label_map.get(obj_id, getattr(obj, 'label', '')).lower()
-                    
-                    if detected_name and detected_name not in state["target_priorities"]:
-                        unknown_target = obj
-                        unknown_target_name = detected_name
-                        break
-
-            tracking_target = active_target if active_target else unknown_target
-            tracking_target_name = active_target_name if active_target else unknown_target_name
+                if tracking_target: break
 
             if tracking_target:
-                # If we have a target, ONLY draw the box and label for that specific target
                 vision.draw_objects(frame, [tracking_target], labels=label_map)
             else:
-                # If the robot is bored/searching, show everything it sees
                 vision.draw_objects(frame, all_objects, labels=label_map)
                 
             obstacle_active = await behaviors.check_obstacle_safety(dist, state, mc, ms, rotate_head_event)
@@ -185,11 +160,9 @@ async def detect_logic(mc, ms):
                 target_lost_time = None
                 state["lost_turn_done"] = False
 
-                # --- THE FIX: Reset the Search Memory when target is found! ---
                 if state.get("search_stage", 0) > 0 or state.get("search_done", False):
                     state["search_stage"] = 0
                     state["search_done"] = False
-                # --------------------------------------------------------------
 
                 if not obstacle_active:
                     if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event): continue
@@ -199,9 +172,6 @@ async def detect_logic(mc, ms):
                         rotate_head_event.clear()
 
                     state["last_face_seen_time"] = time.time()
-
-                    if unknown_target:
-                        if await behaviors.handle_investigation(dist, unknown_target_name, state, mc): continue
 
                 is_investigating = (getattr(mc, 'current_motion', None) == MOTION_CROUCH_ID)
                 if not mc.locked() or is_investigating:
@@ -216,16 +186,12 @@ async def detect_logic(mc, ms):
                 if not obstacle_active:
                     if await behaviors.handle_lost_face_turn(idle_time, state, mc): continue
 
-                # --- THE FIX: Trigger the Persistent Search ---
                 if not obstacle_active and not state["is_sitting"]:
                     is_searching = await behaviors.handle_persistent_search(idle_time, state, mc, ms)
                 else:
                     is_searching = False
-                # ----------------------------------------------
 
                 if time.time() - target_lost_time > 2.0:
-                    
-                    # Lock the background environment checks while actively searching
                     if is_searching:
                         rotate_head_event.clear()
                     elif not obstacle_active and not rotate_head_event.is_set() and not mc.locked() and (idle_time > 2.0):
@@ -237,10 +203,9 @@ async def detect_logic(mc, ms):
                         if not state["is_sitting"]:
                             asyncio.create_task(system_utils.blink_led(0.5))
 
-            # Dynamic Balance / Lean Check runs continuously
             await manual_servo_controller.handle_dynamic_lean(state, mc)
-
             await asyncio.sleep(0.001)
+            
     finally:
         print(f"{COLOR_RED}[SHUTDOWN] Releasing Camera Hardware...{COLOR_RESET}")
         if hasattr(frames, "close"): frames.close()
@@ -248,7 +213,6 @@ async def detect_logic(mc, ms):
 async def main():
     print(f"{COLOR_MAGENTA}--- Robot Control System Init (Multi-Target Mode) ---{COLOR_RESET}")
     
-    # We removed ensure_pigpiod() because we upgraded to gpiozero!
     system_utils.setup_gpio()
 
     ms = head_tracking.MicroServo(TILT_SERVO_PIN, state)
@@ -277,7 +241,6 @@ async def main():
     
 if __name__ == "__main__":
     try:
-        # Modern asyncio execution
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\nStopping...")
