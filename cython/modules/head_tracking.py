@@ -37,10 +37,10 @@ DEBUG_TRACKING = True
 TRACKING_DIRECTION = -1.0
 
 # === TUNING UPDATES FOR STABILITY ===
-TRACKING_GAIN_PAN = 55.0
+TRACKING_GAIN_PAN = 15.0      # Reduced from 55.0 to stop wind-up
 TRACKING_GAIN_TILT = 70.0
-TRACKING_DEADZONE = 0.04
-MAX_PAN_STEP = 9.0
+TRACKING_DEADZONE = 0.08      # Increased from 0.04 to create a solid center buffer
+MAX_PAN_STEP = 3.0            # Reduced from 9.0 to limit max rotation speed per frame
 # ====================================
 
 
