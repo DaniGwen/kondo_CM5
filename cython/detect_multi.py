@@ -160,11 +160,12 @@ async def detect_logic(mc, ms):
             if tracking_target:
                 target_lost_time = None
                 state["lost_turn_done"] = False
+                state["last_target_seen_time"] = time.time()
 
-                if state.get("search_stage", 0) > 0 or state.get("search_done", False):
+                if state.get("search_stage", 0) > 0:
                     state["search_stage"] = 0
+                    state["search_stage_start"] = None
                     state["search_done"] = False
-                    state["last_target_seen_time"] = 0
 
                 if not obstacle_active:
                     if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event): continue
@@ -196,10 +197,10 @@ async def detect_logic(mc, ms):
                 else:
                     is_searching = False
 
-                if time.time() - target_lost_time > 2.0:
+                if time.time() - target_lost_time > 4.0:
                     if is_searching:
                         rotate_head_event.clear()
-                    elif not obstacle_active and not rotate_head_event.is_set() and not mc.locked() and (idle_time > 2.0):
+                    elif not obstacle_active and not rotate_head_event.is_set() and not mc.locked() and (idle_time > 4.0):
                         print(f"{COLOR_MAGENTA}Area clear. Resuming environment check.{COLOR_RESET}")
                         rotate_head_event.set()
 

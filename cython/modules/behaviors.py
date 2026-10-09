@@ -319,7 +319,7 @@ async def handle_lost_face_turn(idle_time, state, mc):
         pan = state.get("current_pan", 0)
         state["lost_turn_done"] = True
 
-        if pan >= 15.0:
+        if pan >= 30.0:
             print(
                 f"{COLOR_YELLOW}!!! TARGET LOST LEFT - QUICK SEARCH TURN !!!{COLOR_RESET}"
             )
@@ -330,7 +330,7 @@ async def handle_lost_face_turn(idle_time, state, mc):
             state["needs_home_reset"] = True
             return True
 
-        elif pan <= -15.0:
+        elif pan <= -30.0:
             print(
                 f"{COLOR_YELLOW}!!! TARGET LOST RIGHT - QUICK SEARCH TURN !!!{COLOR_RESET}"
             )

@@ -34,7 +34,6 @@ LOOK_PAUSE = 1.0
 
 # Tracking Tuning
 DEBUG_TRACKING = True
-TRACKING_DIRECTION = -1.0
 
 # === TUNING UPDATES FOR STABILITY ===
 TRACKING_GAIN_PAN = 15.0      # Reduced from 55.0 to stop wind-up
@@ -207,7 +206,7 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
     error_x = 0.5 - cx
     error_y = 0.5 - cy
 
-    pan_change = (error_x * TRACKING_GAIN_PAN) * TRACKING_DIRECTION
+    pan_change = error_x * TRACKING_GAIN_PAN
     tilt_change = -1 * (error_y * (TRACKING_GAIN_TILT / 2))
 
     if pan_change > MAX_PAN_STEP:
