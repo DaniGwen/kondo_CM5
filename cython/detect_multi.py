@@ -126,127 +126,131 @@ async def detect_logic(mc, ms):
 
         await asyncio.sleep(1.0)
 
-    while True:
-        # ---------- CAMERA READ ----------
-        try:
-            frame = next(frames)
-            if frame is None:
-                raise ValueError("Camera returned empty frame")
-            frame_height, frame_width = frame.shape[:2] if hasattr(frame, "shape") else frame.size[::-1]
-        except StopIteration:
-            await asyncio.sleep(0.01)
-            continue
-        except Exception as e:
-            print(f"{COLOR_RED}[ERROR] Camera feed dropped! Reconnecting...{COLOR_RESET}")
-            await asyncio.sleep(1.0)
-            frames = detector.get_frames(size=CAMERA_RESOLUTION)
-            continue
+        while True:
+            # ---------- CAMERA READ ----------
+            try:
+                frame = next(frames)
+                if frame is None:
+                    raise ValueError("Camera returned empty frame")
+                frame_height, frame_width = frame.shape[:2] if hasattr(frame, "shape") else frame.size[::-1]
+            except StopIteration:
+                await asyncio.sleep(0.01)
+                continue
+            except Exception as e:
+                print(f"{COLOR_RED}[ERROR] Camera feed dropped! Reconnecting...{COLOR_RESET}")
+                await asyncio.sleep(1.0)
+                frames = detector.get_frames(size=CAMERA_RESOLUTION)
+                continue
 
-        # Guard against the ISP renegotiating to 0x0 mid-stream
-        if frame_width < 10 or frame_height < 10:
-            await asyncio.sleep(0.01)
-            continue
+            # Guard against the ISP renegotiating to 0x0 mid-stream
+            if frame_width < 10 or frame_height < 10:
+                await asyncio.sleep(0.01)
+                continue
 
-        # ---------- EVERYTHING ELSE ----------
-        try:
-            all_objects = detector.get_objects(frame, threshold=0.15)
-            dist = state["distance_cm"]
-            rcb4_sensor_reader.update_foot_sensors(mc, state)
+            # ---------- EVERYTHING ELSE ----------
+            try:
+                all_objects = detector.get_objects(frame, threshold=0.15)
+                dist = state["distance_cm"]
+                rcb4_sensor_reader.update_foot_sensors(mc, state)
 
-            tracking_target = None
-            tracking_target_name = ""
+                tracking_target = None
+                tracking_target_name = ""
 
-            for priority_label in state["target_priorities"]:
-                for obj in all_objects:
-                    obj_id = getattr(obj, 'id', None)
-                    detected_name = label_map.get(obj_id, getattr(obj, 'label', '')).lower()
-                    if detected_name == priority_label.lower():
-                        tracking_target = obj
-                        tracking_target_name = detected_name
+                for priority_label in state["target_priorities"]:
+                    for obj in all_objects:
+                        obj_id = getattr(obj, 'id', None)
+                        detected_name = label_map.get(obj_id, getattr(obj, 'label', '')).lower()
+                        if detected_name == priority_label.lower():
+                            tracking_target = obj
+                            tracking_target_name = detected_name
+                            break
+                    if tracking_target:
                         break
+
                 if tracking_target:
-                    break
+                    state["last_target_seen_time"] = time.time()
+                    vision.draw_objects(frame, [tracking_target], labels=label_map)
+                else:
+                    vision.draw_objects(frame, all_objects, labels=label_map)
 
-            if tracking_target:
-                state["last_target_seen_time"] = time.time()
-                vision.draw_objects(frame, [tracking_target], labels=label_map)
-            else:
-                vision.draw_objects(frame, all_objects, labels=label_map)
-
-            obstacle_active = await behaviors.check_obstacle_safety(
-                dist, state, mc, ms, rotate_head_event
-            )
-
-            if tracking_target:
-                target_lost_time = None
-                state["lost_turn_done"] = False
-                state["last_target_seen_time"] = time.time()
-
-                if state.get("search_stage", 0) > 0:
-                    state["search_stage"] = 0
-                    state["search_stage_start"] = None
-                    state["search_done"] = False
-
-                if not obstacle_active:
-                    if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event):
-                        continue
-
-                    if rotate_head_event.is_set():
-                        print(f"{COLOR_MAGENTA}!!! TARGET ACQUIRED [{tracking_target_name}] - TRACKING !!!{COLOR_RESET}")
-                        rotate_head_event.clear()
-
-                    state["last_face_seen_time"] = time.time()
-
-                is_investigating = (getattr(mc, 'current_motion', None) == MOTION_CROUCH_ID)
-                if not mc.locked() or is_investigating:
-                    head_tracking.track_face(
-                        mc.kondo, ms, tracking_target, frame_width, frame_height, state
-                    )
-
-            else:
-                if target_lost_time is None:
-                    target_lost_time = time.time()
-
-                idle_time = time.time() - max(
-                    state.get("last_face_seen_time", 0),
-                    state.get("last_target_seen_time", 0)
+                obstacle_active = await behaviors.check_obstacle_safety(
+                    dist, state, mc, ms, rotate_head_event
                 )
 
-                if not obstacle_active:
-                    if await behaviors.handle_lost_face_turn(idle_time, state, mc):
-                        continue
+                if tracking_target:
+                    target_lost_time = None
+                    state["lost_turn_done"] = False
+                    state["last_target_seen_time"] = time.time()
 
-                if not obstacle_active and not state["is_sitting"]:
-                    is_searching = await behaviors.handle_persistent_search(
-                        idle_time, state, mc, ms
-                    )
+                    if state.get("search_stage", 0) > 0:
+                        state["search_stage"] = 0
+                        state["search_stage_start"] = None
+                        state["search_done"] = False
+
+                    if not obstacle_active:
+                        if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event):
+                            continue
+
+                        if rotate_head_event.is_set():
+                            print(f"{COLOR_MAGENTA}!!! TARGET ACQUIRED [{tracking_target_name}] - TRACKING !!!{COLOR_RESET}")
+                            rotate_head_event.clear()
+
+                        state["last_face_seen_time"] = time.time()
+
+                    is_investigating = (getattr(mc, 'current_motion', None) == MOTION_CROUCH_ID)
+                    if not mc.locked() or is_investigating:
+                        head_tracking.track_face(
+                            mc.kondo, ms, tracking_target, frame_width, frame_height, state
+                        )
+
                 else:
-                    is_searching = False
+                    if target_lost_time is None:
+                        target_lost_time = time.time()
 
-                if time.time() - target_lost_time > 4.0:
-                    if is_searching:
-                        rotate_head_event.clear()
-                    elif (not obstacle_active
-                          and not rotate_head_event.is_set()
-                          and not mc.locked()
-                          and idle_time > 4.0):
-                        print(f"{COLOR_MAGENTA}Area clear. Resuming environment check.{COLOR_RESET}")
-                        rotate_head_event.set()
+                    idle_time = time.time() - max(
+                        state.get("last_face_seen_time", 0),
+                        state.get("last_target_seen_time", 0)
+                    )
 
-                    if 2.0 < dist < DISTANCE_THRESHOLD:
-                        rotate_head_event.clear()
-                        if not state["is_sitting"]:
-                            asyncio.create_task(system_utils.blink_led(0.5))
+                    if not obstacle_active:
+                        if await behaviors.handle_lost_face_turn(idle_time, state, mc):
+                            continue
 
-            await manual_servo_controller.handle_dynamic_lean(state, mc)
+                    if not obstacle_active and not state["is_sitting"]:
+                        is_searching = await behaviors.handle_persistent_search(
+                            idle_time, state, mc, ms
+                        )
+                    else:
+                        is_searching = False
 
-        except Exception as e:
-            import traceback
-            print(f"{COLOR_RED}[LOOP ERROR] {type(e).__name__}: {e}{COLOR_RESET}")
-            traceback.print_exc()
-            await asyncio.sleep(0.05)
+                    if time.time() - target_lost_time > 4.0:
+                        if is_searching:
+                            rotate_head_event.clear()
+                        elif (not obstacle_active
+                            and not rotate_head_event.is_set()
+                            and not mc.locked()
+                            and idle_time > 4.0):
+                            print(f"{COLOR_MAGENTA}Area clear. Resuming environment check.{COLOR_RESET}")
+                            rotate_head_event.set()
 
-        await asyncio.sleep(0.001)
+                        if 2.0 < dist < DISTANCE_THRESHOLD:
+                            rotate_head_event.clear()
+                            if not state["is_sitting"]:
+                                asyncio.create_task(system_utils.blink_led(0.5))
+
+                await manual_servo_controller.handle_dynamic_lean(state, mc)
+
+            except Exception as e:
+                import traceback
+                print(f"{COLOR_RED}[LOOP ERROR] {type(e).__name__}: {e}{COLOR_RESET}")
+                traceback.print_exc()
+                await asyncio.sleep(0.05)
+
+            await asyncio.sleep(0.001)
+    finally:
+        print(f"{COLOR_RED}[SHUTDOWN] Releasing Camera Hardware...{COLOR_RESET}")
+        if hasattr(frames, "close"):
+            frames.close()
 
 
 async def main():
