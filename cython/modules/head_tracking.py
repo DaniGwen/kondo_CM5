@@ -181,22 +181,23 @@ class HeadBehavior:
 
 
 # --- Tracking Logic ---
-
 def track_face(kondo, ms, face, frame_width, frame_height, state):
     state["tracking_active"] = True
+
     if state.get("skip_frames", 0) > 0:
         state["skip_frames"] -= 1
+        state["tracking_active"] = False
         return False
 
     state["last_face_seen"] = time.time()
-    
+
     now = time.time()
     if now - state.get("last_track_time", 0) < 0.19:
-        return False  
+        state["tracking_active"] = False
+        return False
     state["last_track_time"] = now
 
     if hasattr(face, "bbox") and face.bbox:
-        # Check if bbox is the new OpenCV tuple (x, y, w, h) or legacy object
         if isinstance(face.bbox, tuple):
             x, y, w, h = face.bbox
             abs_cx = x + (w / 2.0)
@@ -206,10 +207,12 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
             abs_cx = box.xmin + (box.xmax - box.xmin) / 2
             abs_cy = box.ymin + (box.ymax - box.ymin) / 2
     else:
+        state["tracking_active"] = False
         return False
 
-    frame_height, frame_width = frame.shape[:2]
+    # ---- NO frame.shape here. Use the passed-in dims. ----
     if frame_width < 10 or frame_height < 10:
+        state["tracking_active"] = False
         return False
 
     cx = abs_cx / frame_width
@@ -252,5 +255,6 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
 
         ms.set_us(new_tilt)
         moved = True
-        state["tracking_active"] = False
-        return moved
+
+    state["tracking_active"] = False
+    return moved
