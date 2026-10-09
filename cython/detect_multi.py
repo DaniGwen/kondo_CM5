@@ -128,27 +128,25 @@ async def detect_logic(mc, ms):
 
         while True:
             # ---------- CAMERA READ ----------
-            try:
+           try:
                 frame = next(frames)
                 if frame is None:
                     raise ValueError("Camera returned empty frame")
                 frame_height, frame_width = frame.shape[:2] if hasattr(frame, "shape") else frame.size[::-1]
-            except StopIteration:
-                await asyncio.sleep(0.01)
+           except StopIteration:
+                print(f"{COLOR_RED}[WARNING] Camera stream ended! Reconnecting...{COLOR_RESET}")
+                await asyncio.sleep(1.0)
+                # Reinitialize the generator to force OpenCV to reconnect to the hardware
+                frames = detector.get_frames(size=CAMERA_RESOLUTION)
                 continue
-            except Exception as e:
+           except Exception as e:
                 print(f"{COLOR_RED}[ERROR] Camera feed dropped! Reconnecting...{COLOR_RESET}")
                 await asyncio.sleep(1.0)
                 frames = detector.get_frames(size=CAMERA_RESOLUTION)
                 continue
 
-            # Guard against the ISP renegotiating to 0x0 mid-stream
-            if frame_width < 10 or frame_height < 10:
-                await asyncio.sleep(0.01)
-                continue
-
             # ---------- EVERYTHING ELSE ----------
-            try:
+           try:
                 all_objects = detector.get_objects(frame, threshold=0.15)
                 dist = state["distance_cm"]
                 rcb4_sensor_reader.update_foot_sensors(mc, state)
@@ -240,13 +238,13 @@ async def detect_logic(mc, ms):
 
                 await manual_servo_controller.handle_dynamic_lean(state, mc)
 
-            except Exception as e:
+           except Exception as e:
                 import traceback
                 print(f"{COLOR_RED}[LOOP ERROR] {type(e).__name__}: {e}{COLOR_RESET}")
                 traceback.print_exc()
                 await asyncio.sleep(0.05)
 
-            await asyncio.sleep(0.001)
+           await asyncio.sleep(0.001)
     finally:
         print(f"{COLOR_RED}[SHUTDOWN] Releasing Camera Hardware...{COLOR_RESET}")
         if hasattr(frames, "close"):
