@@ -424,6 +424,7 @@ async def investigation_sequence(mc, state):
         if ir_tripped:
             print(f"{COLOR_MAGENTA}Object is low/lost. Crouching to confirm...{COLOR_RESET}")
             if not state.get("emergency_stop"):
+                state["investigating_low_object"] = True
                 await mc.run(MOTION_CROUCH_ID, state=state, sleep_time=4.0, continuous=True)
         else:
             print(f"{COLOR_MAGENTA}Object is in clear view. No crouch required.{COLOR_RESET}")
@@ -441,6 +442,7 @@ async def investigation_sequence(mc, state):
             
     finally:
         state["macro_active"] = False
+        state["investigating_low_object"] = True
 
 
 async def handle_investigation(dist, target_name, state, mc):
@@ -546,7 +548,10 @@ async def handle_persistent_search(idle_time, state, mc, ms):
         return False
 
     # Wait 1.5 seconds after losing the target before panicking and searching
-    if idle_time < 1.5:
+    if idle_time < 3.0:
+        return False
+
+    if state.get("search_stage", 0) > 0 and state.get("search_stage_start") is None:
         return False
 
     stage = state.get("search_stage", 0)

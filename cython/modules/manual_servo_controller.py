@@ -4,6 +4,12 @@ from modules import head_tracking
 
 
 async def handle_dynamic_lean(state, mc):
+    if state.get("macro_active", False):
+        return
+    if not state.get("investigating_low_object", False):
+        return
+    if state.get("current_tracking_target") is not None:
+        return
     """Priority 5.8: Leans the body forward and throws arms back for balance."""
     if (
         mc.locked()

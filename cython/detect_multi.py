@@ -150,6 +150,7 @@ async def detect_logic(mc, ms):
                 if tracking_target: break
 
             if tracking_target:
+                state["last_target_seen_time"] = time.time()
                 vision.draw_objects(frame, [tracking_target], labels=label_map)
             else:
                 vision.draw_objects(frame, all_objects, labels=label_map)
@@ -163,6 +164,7 @@ async def detect_logic(mc, ms):
                 if state.get("search_stage", 0) > 0 or state.get("search_done", False):
                     state["search_stage"] = 0
                     state["search_done"] = False
+                    state["last_target_seen_time"] = 0
 
                 if not obstacle_active:
                     if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event): continue
@@ -181,7 +183,10 @@ async def detect_logic(mc, ms):
                 if target_lost_time is None:
                     target_lost_time = time.time()
 
-                idle_time = time.time() - state.get("last_face_seen_time", time.time())
+                idle_time = time.time() - max(
+                    state.get("last_face_seen_time", 0),
+                    state.get("last_target_seen_time", 0)
+                )
 
                 if not obstacle_active:
                     if await behaviors.handle_lost_face_turn(idle_time, state, mc): continue
