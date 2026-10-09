@@ -36,10 +36,11 @@ LOOK_PAUSE = 1.0
 DEBUG_TRACKING = True
 
 # === TUNING UPDATES FOR STABILITY ===
-TRACKING_GAIN_PAN = 15.0      # Reduced from 55.0 to stop wind-up
-TRACKING_GAIN_TILT = 70.0
-TRACKING_DEADZONE = 0.08      # Increased from 0.04 to create a solid center buffer
-MAX_PAN_STEP = 3.0            # Reduced from 9.0 to limit max rotation speed per frame
+TRACKING_GAIN_PAN = 15.0
+TRACKING_GAIN_TILT = 40.0      # was 70.0 — reduce tilt aggressiveness
+TRACKING_DEADZONE = 0.08
+MAX_PAN_STEP = 3.0
+MAX_TILT_STEP = 6.0      
 # ====================================
 
 
@@ -59,8 +60,12 @@ class MicroServo:
         self.servo.detach()
 
     def set_us(self, us):
-        self.state["current_tilt"] = us
         us = max(500, min(2500, int(us)))
+        prev = self.state.get("current_tilt", us)
+        self.state["current_tilt"] = us
+        # Skip re-driving the servo for tiny changes — eliminates jitter
+        if abs(us - prev) < 5:
+            return
         mapped_value = (us - 1500) / 1000.0
         self.servo.value = mapped_value
 
@@ -77,8 +82,10 @@ class MicroServo:
             time.sleep(delay)
             
         self.set_us(target_us)
-        time.sleep(0.1) # Allow physical motor to catch up to final signal
-        self.servo.detach() # Cut the PWM signal to freeze position and stop twitching
+        time.sleep(0.1)  # Allow physical motor to catch up
+        # Only detach if we're not mid-tracking — detach causes a visible twitch
+        if not self.state.get("tracking_active", False):
+            self.servo.detach()
 
     def center(self):
         if self.state.get("is_sitting", False):
@@ -176,6 +183,7 @@ class HeadBehavior:
 # --- Tracking Logic ---
 
 def track_face(kondo, ms, face, frame_width, frame_height, state):
+    state["tracking_active"] = True
     if state.get("skip_frames", 0) > 0:
         state["skip_frames"] -= 1
         return False
@@ -198,6 +206,10 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
             abs_cx = box.xmin + (box.xmax - box.xmin) / 2
             abs_cy = box.ymin + (box.ymax - box.ymin) / 2
     else:
+        return False
+
+    frame_height, frame_width = frame.shape[:2]
+    if frame_width < 10 or frame_height < 10:
         return False
 
     cx = abs_cx / frame_width
@@ -229,11 +241,16 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
         moved = True
 
     if abs(error_y) > TRACKING_DEADZONE:
+        if tilt_change > MAX_TILT_STEP:
+            tilt_change = MAX_TILT_STEP
+        elif tilt_change < -MAX_TILT_STEP:
+            tilt_change = -MAX_TILT_STEP
+
         new_tilt = state["current_tilt"] + tilt_change
         new_tilt = max(TILT_UP, min(TILT_DOWN, new_tilt))
         new_tilt = max(500, new_tilt)
 
         ms.set_us(new_tilt)
         moved = True
-
-    return moved
+        state["tracking_active"] = False
+        return moved

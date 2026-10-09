@@ -547,8 +547,7 @@ async def handle_persistent_search(idle_time, state, mc, ms):
     if state.get("search_done", False) or state.get("is_sitting", False) or mc.locked():
         return False
 
-    # Wait 1.5 seconds after losing the target before panicking and searching
-    if idle_time < 3.0:
+    if idle_time < 4.0:
         return False
 
     if state.get("search_stage", 0) > 0 and state.get("search_stage_start") is None:

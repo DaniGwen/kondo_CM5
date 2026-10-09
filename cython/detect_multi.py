@@ -32,31 +32,33 @@ state = {
     "current_pan": head_tracking.PAN_CENTER,
     "current_tilt": head_tracking.TILT_CENTER,
     "return_steps_pending": 0,
-    
     # STRICT FILTER: The robot will only track humans.
-    "target_priorities": ["person"]
+    "target_priorities": ["person"],
 }
+
 
 def load_labels(file_path):
     """Reads a labels.txt file and returns a dictionary mapping IDs to strings."""
     labels = {}
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             for i, line in enumerate(f.readlines()):
                 line = line.strip()
-                if not line: continue
-                
-                parts = line.split(' ', 1)
+                if not line:
+                    continue
+
+                parts = line.split(" ", 1)
                 if parts[0].isdigit():
                     labels[int(parts[0])] = parts[1].lower()
                 else:
                     labels[i] = line.lower()
-                    
+
         print(f"Loaded {len(labels)} classes from {file_path}")
     except Exception as e:
         print(f"[WARNING] Could not load {file_path}: {e}")
-        
+
     return labels
+
 
 async def idle_manager_task(mc, ms):
     print("Starting Idle Manager...")
@@ -68,12 +70,14 @@ async def idle_manager_task(mc, ms):
 
         if idle_time > SIT_DOWN_THRESHOLD and not state["is_sitting"]:
             print(f"Idle for {idle_time:.1f}s. Sitting Down...")
-            
+
             if state.get("needs_home_reset", False):
                 print("Resetting legs before sitting...")
-                await mc.run(MOTION_HOME_STAND_ID, state=state, sleep_time=1.5, continuous=True)
+                await mc.run(
+                    MOTION_HOME_STAND_ID, state=state, sleep_time=1.5, continuous=True
+                )
                 state["needs_home_reset"] = False
-                
+
             state["is_sitting"] = True
             state["is_walking_fwd"] = False
             state["is_walking_back"] = False
@@ -84,7 +88,9 @@ async def idle_manager_task(mc, ms):
             await asyncio.sleep(0.5)
 
             print("Executing Sit Down motion...")
-            await mc.run(MOTION_SIT_DOWN_ID, state=state, sleep_time=4.0, continuous=True)
+            await mc.run(
+                MOTION_SIT_DOWN_ID, state=state, sleep_time=4.0, continuous=True
+            )
             print(f"Disabling Torque (Motion {MOTION_TORQUE_OFF_ID})...")
             await mc.run(MOTION_TORQUE_OFF_ID, state=state, sleep_time=3.0)
 
@@ -92,70 +98,84 @@ async def idle_manager_task(mc, ms):
             continue
         await asyncio.sleep(5.0 if state["is_sitting"] else 1.0)
 
+
 async def detect_logic(mc, ms):
     print(f"{COLOR_MAGENTA}Loading Multi-Object Vision Model...{COLOR_RESET}")
     detector = VisionBridge(models.OBJECT_DETECTION_MODEL)
     frames = detector.get_frames(size=CAMERA_RESOLUTION)
-    
-    label_map = load_labels(models.OBJECT_DETECTION_LABELS) 
-    print(f"{COLOR_MAGENTA}Multi-Object Vision System Ready. (Tracking Debug: ON){COLOR_RESET}")
+
+    label_map = load_labels(models.OBJECT_DETECTION_LABELS)
+    print(
+        f"{COLOR_MAGENTA}Multi-Object Vision System Ready. (Tracking Debug: ON){COLOR_RESET}"
+    )
 
     target_lost_time = None
     try:
-        print(f"{COLOR_YELLOW}[INIT] Centering head and resetting state...{COLOR_RESET}")
+        print(
+            f"{COLOR_YELLOW}[INIT] Centering head and resetting state...{COLOR_RESET}"
+        )
         state["current_pan"] = 0
         state["current_tilt"] = head_tracking.TILT_CENTER
-        mc.kondo.set_angle(head_tracking.SERVO_ID_HEAD_PAN, 0, head_tracking.PAN_SPEED_NORMAL)
+        mc.kondo.set_angle(
+            head_tracking.SERVO_ID_HEAD_PAN, 0, head_tracking.PAN_SPEED_NORMAL
+        )
         try:
-          ms.center()
+            ms.center()
         except Exception:
-          pass
-        
-        await asyncio.sleep(1.0)
-    
-        while True:
-            try:
-                frame = next(frames)
-                if frame is None:
-                    raise ValueError("Camera returned empty frame")
-                    
-                frame_height, frame_width = frame.shape[:2] if hasattr(frame, "shape") else frame.size[::-1]
-                
-            except StopIteration:
-                await asyncio.sleep(0.01)
-                continue
-            except Exception as e:
-                print(f"{COLOR_RED}[ERROR] Camera feed dropped! Reconnecting...{COLOR_RESET}")
-                await asyncio.sleep(1.0) 
-                frames = detector.get_frames(size=CAMERA_RESOLUTION)
-                continue
+            pass
 
-            all_objects = detector.get_objects(frame, threshold=0.2)
+        await asyncio.sleep(1.0)
+
+    while True:
+        # ---------- CAMERA READ ----------
+        try:
+            frame = next(frames)
+            if frame is None:
+                raise ValueError("Camera returned empty frame")
+            frame_height, frame_width = frame.shape[:2] if hasattr(frame, "shape") else frame.size[::-1]
+        except StopIteration:
+            await asyncio.sleep(0.01)
+            continue
+        except Exception as e:
+            print(f"{COLOR_RED}[ERROR] Camera feed dropped! Reconnecting...{COLOR_RESET}")
+            await asyncio.sleep(1.0)
+            frames = detector.get_frames(size=CAMERA_RESOLUTION)
+            continue
+
+        # Guard against the ISP renegotiating to 0x0 mid-stream
+        if frame_width < 10 or frame_height < 10:
+            await asyncio.sleep(0.01)
+            continue
+
+        # ---------- EVERYTHING ELSE ----------
+        try:
+            all_objects = detector.get_objects(frame, threshold=0.15)
             dist = state["distance_cm"]
             rcb4_sensor_reader.update_foot_sensors(mc, state)
-            
+
             tracking_target = None
             tracking_target_name = ""
-            
-            # STRICT FILTER: Only lock onto targets explicitly in the priority list
+
             for priority_label in state["target_priorities"]:
                 for obj in all_objects:
                     obj_id = getattr(obj, 'id', None)
                     detected_name = label_map.get(obj_id, getattr(obj, 'label', '')).lower()
-                    
                     if detected_name == priority_label.lower():
                         tracking_target = obj
-                        tracking_target_name = detected_name 
-                        break 
-                if tracking_target: break
+                        tracking_target_name = detected_name
+                        break
+                if tracking_target:
+                    break
 
             if tracking_target:
                 state["last_target_seen_time"] = time.time()
                 vision.draw_objects(frame, [tracking_target], labels=label_map)
             else:
                 vision.draw_objects(frame, all_objects, labels=label_map)
-                
-            obstacle_active = await behaviors.check_obstacle_safety(dist, state, mc, ms, rotate_head_event)
+
+            obstacle_active = await behaviors.check_obstacle_safety(
+                dist, state, mc, ms, rotate_head_event
+            )
 
             if tracking_target:
                 target_lost_time = None
@@ -168,7 +188,8 @@ async def detect_logic(mc, ms):
                     state["search_done"] = False
 
                 if not obstacle_active:
-                    if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event): continue
+                    if await behaviors.handle_wake_up(state, mc, ms, rotate_head_event):
+                        continue
 
                     if rotate_head_event.is_set():
                         print(f"{COLOR_MAGENTA}!!! TARGET ACQUIRED [{tracking_target_name}] - TRACKING !!!{COLOR_RESET}")
@@ -178,7 +199,9 @@ async def detect_logic(mc, ms):
 
                 is_investigating = (getattr(mc, 'current_motion', None) == MOTION_CROUCH_ID)
                 if not mc.locked() or is_investigating:
-                    head_tracking.track_face(mc.kondo, ms, tracking_target, frame_width, frame_height, state)
+                    head_tracking.track_face(
+                        mc.kondo, ms, tracking_target, frame_width, frame_height, state
+                    )
 
             else:
                 if target_lost_time is None:
@@ -190,17 +213,23 @@ async def detect_logic(mc, ms):
                 )
 
                 if not obstacle_active:
-                    if await behaviors.handle_lost_face_turn(idle_time, state, mc): continue
+                    if await behaviors.handle_lost_face_turn(idle_time, state, mc):
+                        continue
 
                 if not obstacle_active and not state["is_sitting"]:
-                    is_searching = await behaviors.handle_persistent_search(idle_time, state, mc, ms)
+                    is_searching = await behaviors.handle_persistent_search(
+                        idle_time, state, mc, ms
+                    )
                 else:
                     is_searching = False
 
                 if time.time() - target_lost_time > 4.0:
                     if is_searching:
                         rotate_head_event.clear()
-                    elif not obstacle_active and not rotate_head_event.is_set() and not mc.locked() and (idle_time > 4.0):
+                    elif (not obstacle_active
+                          and not rotate_head_event.is_set()
+                          and not mc.locked()
+                          and idle_time > 4.0):
                         print(f"{COLOR_MAGENTA}Area clear. Resuming environment check.{COLOR_RESET}")
                         rotate_head_event.set()
 
@@ -210,28 +239,38 @@ async def detect_logic(mc, ms):
                             asyncio.create_task(system_utils.blink_led(0.5))
 
             await manual_servo_controller.handle_dynamic_lean(state, mc)
-            await asyncio.sleep(0.001)
-            
-    finally:
-        print(f"{COLOR_RED}[SHUTDOWN] Releasing Camera Hardware...{COLOR_RESET}")
-        if hasattr(frames, "close"): frames.close()
+
+        except Exception as e:
+            import traceback
+            print(f"{COLOR_RED}[LOOP ERROR] {type(e).__name__}: {e}{COLOR_RESET}")
+            traceback.print_exc()
+            await asyncio.sleep(0.05)
+
+        await asyncio.sleep(0.001)
+
 
 async def main():
-    print(f"{COLOR_MAGENTA}--- Robot Control System Init (Multi-Target Mode) ---{COLOR_RESET}")
-    
+    print(
+        f"{COLOR_MAGENTA}--- Robot Control System Init (Multi-Target Mode) ---{COLOR_RESET}"
+    )
+
     system_utils.setup_gpio()
 
     ms = head_tracking.MicroServo(TILT_SERVO_PIN, state)
     kondo = Kondo()
-    if kondo.init() < 0: 
+    if kondo.init() < 0:
         print(f"{COLOR_YELLOW}Warning: Kondo Init failed.{COLOR_RESET}")
 
     mc = MotionController(kondo, MOTION_DEFAULT_TIMEOUT)
 
-    print(f"{COLOR_MAGENTA}Enabling Torque (Motion {MOTION_TORQUE_ON_ID})...{COLOR_RESET}")
+    print(
+        f"{COLOR_MAGENTA}Enabling Torque (Motion {MOTION_TORQUE_ON_ID})...{COLOR_RESET}"
+    )
     await mc.run(MOTION_TORQUE_ON_ID, state=state, sleep_time=2.0)
 
-    print(f"{COLOR_MAGENTA}Executing HOME POS (ID 2)... Robot will stand/reset.{COLOR_RESET}")
+    print(
+        f"{COLOR_MAGENTA}Executing HOME POS (ID 2)... Robot will stand/reset.{COLOR_RESET}"
+    )
     await mc.run(MOTION_HOME_STAND_ID, state=state)
 
     state["current_pan"] = 0
@@ -244,7 +283,8 @@ async def main():
         idle_manager_task(mc, ms),
         detect_logic(mc, ms),
     )
-    
+
+
 if __name__ == "__main__":
     try:
         asyncio.run(main())
