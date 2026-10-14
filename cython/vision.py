@@ -93,7 +93,14 @@ class VisionBridge:
 
         try:
             while cap.isOpened():
-                ret, frame = cap.read()
+                # FLUSH THE BUFFER: V4L2 secretly queues frames, causing massive visual lag.
+                # Grabbing and discarding 3 frames forces OpenCV to jump to real-time.
+                cap.grab()
+                cap.grab()
+                cap.grab()
+                
+                # Retrieve and decode only the absolute newest frame
+                ret, frame = cap.retrieve()
                 if not ret:
                     break
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

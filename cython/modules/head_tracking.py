@@ -36,12 +36,12 @@ LOOK_PAUSE = 1.0
 DEBUG_TRACKING = True
 
 # === TUNING UPDATES FOR STABILITY ===
-TRACKING_GAIN_PAN = 15.0
-TRACKING_GAIN_TILT = 40.0      
+TRACKING_GAIN_PAN = 35.0      # Increased to react faster
+TRACKING_GAIN_TILT = 50.0      
 TRACKING_DEADZONE = 0.08
-MAX_PAN_STEP = 3.0
-MAX_TILT_STEP = 6.0      
-TRACKING_DIRECTION = 1.0  # Positive 1.0 reverses the servo to match the math
+MAX_PAN_STEP = 12.0           # Quadrupled to eliminate the slow-motion tracking
+MAX_TILT_STEP = 8.0      
+TRACKING_DIRECTION = 1.0
 # ====================================
 
 
