@@ -585,21 +585,19 @@ async def handle_persistent_search(idle_time, state, mc, ms):
         state["search_stage_start"] = time.time()
         return True
 
-    elif stage == 2 and stage_time > 2.5:  # Extra time given for the lean to complete
+    elif stage == 2 and stage_time > 2.5:  
         print(f"{COLOR_YELLOW}??? Searching LEFT... ???{COLOR_RESET}")
-        ms.center()  # This makes the head look up, which automatically straightens the legs!
-        mc.kondo.set_angle(
-            head_tracking.SERVO_ID_HEAD_PAN, 45, head_tracking.PAN_SPEED_NORMAL
-        )
+        ms.center()  
+        mc.kondo.set_angle(head_tracking.SERVO_ID_HEAD_PAN, 45, head_tracking.PAN_SPEED_NORMAL)
+        state["current_pan"] = 45.0  # <--- MUST SYNC STATE
         state["search_stage"] = 3
         state["search_stage_start"] = time.time()
         return True
 
     elif stage == 3 and stage_time > 1.5:
         print(f"{COLOR_YELLOW}??? Searching RIGHT... ???{COLOR_RESET}")
-        mc.kondo.set_angle(
-            head_tracking.SERVO_ID_HEAD_PAN, -45, head_tracking.PAN_SPEED_NORMAL
-        )
+        mc.kondo.set_angle(head_tracking.SERVO_ID_HEAD_PAN, -45, head_tracking.PAN_SPEED_NORMAL)
+        state["current_pan"] = -45.0 # <--- MUST SYNC STATE
         state["search_stage"] = 4
         state["search_stage_start"] = time.time()
         return True
@@ -607,10 +605,8 @@ async def handle_persistent_search(idle_time, state, mc, ms):
     elif stage == 4 and stage_time > 1.5:
         print(f"{COLOR_YELLOW}... Target is gone. Giving up search. ...{COLOR_RESET}")
         ms.center()
-        mc.kondo.set_angle(
-            head_tracking.SERVO_ID_HEAD_PAN, 0, head_tracking.PAN_SPEED_NORMAL
-        )
-
+        mc.kondo.set_angle(head_tracking.SERVO_ID_HEAD_PAN, 0, head_tracking.PAN_SPEED_NORMAL)
+        state["current_pan"] = 0.0   # <--- MUST SYNC STATE
         state["search_done"] = True
         state["search_stage"] = 0
         return False
