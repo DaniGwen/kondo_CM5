@@ -182,22 +182,19 @@ class HeadBehavior:
 
 # --- Tracking Logic ---
 def track_face(kondo, ms, face, frame_width, frame_height, state):
-    state["tracking_active"] = True
-
     if state.get("skip_frames", 0) > 0:
         state["skip_frames"] -= 1
-        state["tracking_active"] = False
         return False
 
     state["last_face_seen"] = time.time()
-
+    
     now = time.time()
     if now - state.get("last_track_time", 0) < 0.19:
-        state["tracking_active"] = False
-        return False
+        return False  
     state["last_track_time"] = now
 
     if hasattr(face, "bbox") and face.bbox:
+        # Check if bbox is the new OpenCV tuple (x, y, w, h) or legacy object
         if isinstance(face.bbox, tuple):
             x, y, w, h = face.bbox
             abs_cx = x + (w / 2.0)
@@ -207,12 +204,6 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
             abs_cx = box.xmin + (box.xmax - box.xmin) / 2
             abs_cy = box.ymin + (box.ymax - box.ymin) / 2
     else:
-        state["tracking_active"] = False
-        return False
-
-    # ---- NO frame.shape here. Use the passed-in dims. ----
-    if frame_width < 10 or frame_height < 10:
-        state["tracking_active"] = False
         return False
 
     cx = abs_cx / frame_width
@@ -221,16 +212,16 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
     error_x = 0.5 - cx
     error_y = 0.5 - cy
 
-    pan_change = error_x * TRACKING_GAIN_PAN
+    # RESTORED: The direction multiplier is critical to stop reverse-drifting
+    pan_change = (error_x * TRACKING_GAIN_PAN) * TRACKING_DIRECTION
     tilt_change = -1 * (error_y * (TRACKING_GAIN_TILT / 2))
 
-    if pan_change > MAX_PAN_STEP:
-        pan_change = MAX_PAN_STEP
-    elif pan_change < -MAX_PAN_STEP:
-        pan_change = -MAX_PAN_STEP
+    # Smooth clamping
+    pan_change = max(-MAX_PAN_STEP, min(MAX_PAN_STEP, pan_change))
 
     moved = False
 
+    # Pan Update
     if abs(error_x) > TRACKING_DEADZONE:
         current_pan = state["current_pan"]
         new_pan = current_pan + pan_change
@@ -243,18 +234,19 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
         kondo.set_angle(SERVO_ID_HEAD_PAN, new_pan, PAN_SPEED_FAST)
         moved = True
 
+    # Tilt Update & Anti-Jitter
     if abs(error_y) > TRACKING_DEADZONE:
-        if tilt_change > MAX_TILT_STEP:
-            tilt_change = MAX_TILT_STEP
-        elif tilt_change < -MAX_TILT_STEP:
-            tilt_change = -MAX_TILT_STEP
-
         new_tilt = state["current_tilt"] + tilt_change
         new_tilt = max(TILT_UP, min(TILT_DOWN, new_tilt))
         new_tilt = max(500, new_tilt)
 
         ms.set_us(new_tilt)
+        state["tilt_active"] = True
         moved = True
+    else:
+        # If tilt is in the deadzone, detach the servo to stop the jittering
+        if state.get("tilt_active", False):
+            ms.stop()
+            state["tilt_active"] = False
 
-    state["tracking_active"] = False
     return moved
