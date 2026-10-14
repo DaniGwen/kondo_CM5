@@ -315,29 +315,27 @@ async def handle_lost_face_turn(idle_time, state, mc):
     if mc.locked() or state.get("is_sitting", False):
         return False
 
-    if idle_time > 1.0 and not state.get("lost_turn_done", False):
+    # INCREASED TIMEOUT: Wait 2.5s before panic-turning the body
+    if idle_time > 2.5 and not state.get("lost_turn_done", False):
         pan = state.get("current_pan", 0)
         state["lost_turn_done"] = True
 
         if pan >= 30.0:
-            print(
-                f"{COLOR_YELLOW}!!! TARGET LOST LEFT - QUICK SEARCH TURN !!!{COLOR_RESET}"
-            )
-            mc.run_background(
-                MOTION_TURN_LEFT_ID, state=state, sleep_time=1.5, continuous=True
-            )
+            print(f"{COLOR_YELLOW}!!! TARGET LOST LEFT - QUICK SEARCH TURN !!!{COLOR_RESET}")
+            # Physically center the head while the body turns so it doesn't snap
             state["current_pan"] = 0
+            mc.kondo.set_angle(head_tracking.SERVO_ID_HEAD_PAN, 0, head_tracking.PAN_SPEED_NORMAL)
+            
+            mc.run_background(MOTION_TURN_LEFT_ID, state=state, sleep_time=1.5, continuous=True)
             state["needs_home_reset"] = True
             return True
 
         elif pan <= -30.0:
-            print(
-                f"{COLOR_YELLOW}!!! TARGET LOST RIGHT - QUICK SEARCH TURN !!!{COLOR_RESET}"
-            )
-            mc.run_background(
-                MOTION_TURN_RIGHT_ID, state=state, sleep_time=1.5, continuous=True
-            )
+            print(f"{COLOR_YELLOW}!!! TARGET LOST RIGHT - QUICK SEARCH TURN !!!{COLOR_RESET}")
             state["current_pan"] = 0
+            mc.kondo.set_angle(head_tracking.SERVO_ID_HEAD_PAN, 0, head_tracking.PAN_SPEED_NORMAL)
+            
+            mc.run_background(MOTION_TURN_RIGHT_ID, state=state, sleep_time=1.5, continuous=True)
             state["needs_home_reset"] = True
             return True
 
