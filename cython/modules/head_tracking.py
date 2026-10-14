@@ -190,7 +190,7 @@ def track_face(kondo, ms, face, frame_width, frame_height, state):
     state["last_face_seen"] = time.time()
     
     now = time.time()
-    if now - state.get("last_track_time", 0) < 0.19:
+    if now - state.get("last_track_time", 0) < 0.03:
         return False  
     state["last_track_time"] = now
 
