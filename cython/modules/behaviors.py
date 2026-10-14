@@ -552,7 +552,13 @@ async def handle_persistent_search(idle_time, state, mc, ms):
         return False
 
     stage = state.get("search_stage", 0)
-    stage_time = time.time() - state.get("search_stage_start", time.time())
+
+    # Safely handle the case where the key exists but was explicitly set to None
+    start_time = state.get("search_stage_start")
+    if start_time is None:
+        start_time = time.time()
+        
+    stage_time = time.time() - start_time
 
     if stage == 0:
         print(f"{COLOR_YELLOW}??? Target Lost! Searching UP... ???{COLOR_RESET}")
