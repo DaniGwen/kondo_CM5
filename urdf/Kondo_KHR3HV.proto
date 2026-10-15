@@ -1,0 +1,724 @@
+#VRML_SIM R2025a utf8
+# license: Apache License 2.0
+# license url: http://www.apache.org/licenses/LICENSE-2.0
+# This is a proto file for Webots for the Kondo_KHR3HV
+# Extracted from: C:\Users\danig\Desktop\KONDO_KHR3\kondo_CM5\urdf\khr_physics.urdf
+
+PROTO Kondo_KHR3HV [
+  field  SFVec3f     translation     0 0 0
+  field  SFRotation  rotation        0 0 1 0
+  field  SFString    name            "Kondo_KHR3HV"  # Is `Robot.name`.
+  field  SFString    controller      "kondo_tcp_server"          # Is `Robot.controller`.
+  field  MFString    controllerArgs  []              # Is `Robot.controllerArgs`.
+  field  SFString    customData      ""              # Is `Robot.customData`.
+  field  SFBool      supervisor      FALSE           # Is `Robot.supervisor`.
+  field  SFBool      synchronization TRUE            # Is `Robot.synchronization`.
+  field  SFBool      selfCollision   FALSE           # Is `Robot.selfCollision`.
+]
+{
+  Robot {
+    translation IS translation
+    rotation IS rotation
+    controller IS controller
+    controllerArgs IS controllerArgs
+    customData IS customData
+    supervisor IS supervisor
+    synchronization IS synchronization
+    selfCollision IS selfCollision
+    children [
+      Accelerometer {
+        name "accelerometer"
+      }
+      Gyro {
+        name "gyro"
+      }
+      Pose {
+        translation 0.000000 0.000000 0.800000
+        children [
+          DEF body_visual CadShape {
+            url "dae/body.dae"
+          }
+        ]
+      }
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          anchor 0.180000 0.000000 1.375000
+        }
+        device [
+          RotationalMotor {
+            name "base_to_first"
+            maxVelocity 0.5
+            minPosition -2.0
+            maxPosition 2.0
+            maxTorque 1000.0
+          }
+          PositionSensor {
+            name "base_to_first_sensor"
+          }
+        ]
+        endPoint Solid {
+          translation 0.180000 0.000000 1.375000
+          children [
+            Pose {
+              rotation 0.000000 1.000000 0.000000 1.600000
+              children [
+                DEF joint_visual CadShape {
+                  url "dae/joint.dae"
+                }
+              ]
+            }
+            HingeJoint {
+              jointParameters HingeJointParameters {
+                axis 0.000000 1.000000 0.000000
+                anchor 0.075000 0.000000 0.000000
+              }
+              device [
+                RotationalMotor {
+                  name "first_to_first_2"
+                  maxVelocity 0.5
+                  minPosition -2.0
+                  maxPosition 2.0
+                  maxTorque 1000.0
+                }
+                PositionSensor {
+                  name "first_to_first_2_sensor"
+                }
+              ]
+              endPoint Solid {
+                translation 0.075000 0.000000 0.000000
+                children [
+                  Pose {
+                    translation 0.000000 0.000000 -0.035000
+                    children [
+                      DEF joint2_visual CadShape {
+                        url "dae/joint2.dae"
+                      }
+                    ]
+                  }
+                  HingeJoint {
+                    jointParameters HingeJointParameters {
+                      axis 0.000000 0.000000 1.000000
+                      anchor 0.000000 0.000000 -0.050000
+                    }
+                    device [
+                      RotationalMotor {
+                        name "first_2_to_first_3"
+                        maxVelocity 0.5
+                        minPosition -2.0
+                        maxPosition 2.0
+                        maxTorque 1000.0
+                      }
+                      PositionSensor {
+                        name "first_2_to_first_3_sensor"
+                      }
+                    ]
+                    endPoint Solid {
+                      translation 0.000000 0.000000 -0.050000
+                      children [
+                        Pose {
+                          translation 0.000000 0.000000 -0.300000
+                          children [
+                            DEF f_arm_visual CadShape {
+                              url "dae/f_arm.dae"
+                            }
+                          ]
+                        }
+                      ]
+                      name "first_arm_3"
+                      physics Physics {
+                        density -1
+                        mass 0.100000
+                        centerOfMass [ 0.000000 0.000000 0.000000 ]
+                        inertiaMatrix [
+                          1.000000e-03 1.000000e-03 1.000000e-03
+                          0.000000e+00 0.000000e+00 0.000000e+00
+                        ]
+                      }
+                    }
+                  }
+                ]
+                name "first_arm_2"
+                physics Physics {
+                  density -1
+                  mass 0.100000
+                  centerOfMass [ 0.000000 0.000000 0.000000 ]
+                  inertiaMatrix [
+                    1.000000e-03 1.000000e-03 1.000000e-03
+                    0.000000e+00 0.000000e+00 0.000000e+00
+                  ]
+                }
+              }
+            }
+          ]
+          name "first_arm"
+          physics Physics {
+            density -1
+            mass 0.100000
+            centerOfMass [ 0.000000 0.000000 0.000000 ]
+            inertiaMatrix [
+              1.000000e-03 1.000000e-03 1.000000e-03
+              0.000000e+00 0.000000e+00 0.000000e+00
+            ]
+          }
+        }
+      }
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          anchor -0.180000 0.000000 1.375000
+        }
+        device [
+          RotationalMotor {
+            name "base_to_arm2"
+            maxVelocity 0.5
+            minPosition -2.0
+            maxPosition 2.0
+            maxTorque 1000.0
+          }
+          PositionSensor {
+            name "base_to_arm2_sensor"
+          }
+        ]
+        endPoint Solid {
+          translation -0.180000 0.000000 1.375000
+          children [
+            Pose {
+              rotation 0.000000 -1.000000 0.000000 1.600000
+              children [
+                USE joint_visual
+              ]
+            }
+            HingeJoint {
+              jointParameters HingeJointParameters {
+                axis 0.000000 1.000000 0.000000
+                anchor -0.075000 0.000000 0.000000
+              }
+              device [
+                RotationalMotor {
+                  name "arm2_to_arm2_2"
+                  maxVelocity 0.5
+                  minPosition -2.0
+                  maxPosition 2.0
+                  maxTorque 1000.0
+                }
+                PositionSensor {
+                  name "arm2_to_arm2_2_sensor"
+                }
+              ]
+              endPoint Solid {
+                translation -0.075000 0.000000 0.000000
+                children [
+                  Pose {
+                    translation 0.000000 0.000000 -0.035000
+                    children [
+                      USE joint2_visual
+                    ]
+                  }
+                  HingeJoint {
+                    jointParameters HingeJointParameters {
+                      axis 0.000000 0.000000 1.000000
+                      anchor 0.000000 0.000000 -0.040000
+                    }
+                    device [
+                      RotationalMotor {
+                        name "arm2_2_to_arm2_3"
+                        maxVelocity 0.5
+                        minPosition -2.0
+                        maxPosition 2.0
+                        maxTorque 1000.0
+                      }
+                      PositionSensor {
+                        name "arm2_2_to_arm2_3_sensor"
+                      }
+                    ]
+                    endPoint Solid {
+                      translation 0.000000 0.000000 -0.040000
+                      children [
+                        Pose {
+                          translation 0.000000 0.000000 -0.300000
+                          children [
+                            USE f_arm_visual
+                          ]
+                        }
+                      ]
+                      name "arm2_3"
+                      physics Physics {
+                        density -1
+                        mass 0.100000
+                        centerOfMass [ 0.000000 0.000000 0.000000 ]
+                        inertiaMatrix [
+                          1.000000e-03 1.000000e-03 1.000000e-03
+                          0.000000e+00 0.000000e+00 0.000000e+00
+                        ]
+                      }
+                    }
+                  }
+                ]
+                name "arm2_2"
+                physics Physics {
+                  density -1
+                  mass 0.100000
+                  centerOfMass [ 0.000000 0.000000 0.000000 ]
+                  inertiaMatrix [
+                    1.000000e-03 1.000000e-03 1.000000e-03
+                    0.000000e+00 0.000000e+00 0.000000e+00
+                  ]
+                }
+              }
+            }
+          ]
+          name "arm2"
+          physics Physics {
+            density -1
+            mass 0.100000
+            centerOfMass [ 0.000000 0.000000 0.000000 ]
+            inertiaMatrix [
+              1.000000e-03 1.000000e-03 1.000000e-03
+              0.000000e+00 0.000000e+00 0.000000e+00
+            ]
+          }
+        }
+      }
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0.000000 0.000000 1.000000
+          anchor 0.000000 0.000000 0.500000
+        }
+        device [
+          RotationalMotor {
+            name "base_to_base2"
+            maxVelocity 0.5
+            minPosition -2.0
+            maxPosition 2.0
+            maxTorque 1000.0
+          }
+          PositionSensor {
+            name "base_to_base2_sensor"
+          }
+        ]
+        endPoint Solid {
+          translation 0.000000 0.000000 0.500000
+          children [
+            Pose {
+              translation 0.000000 0.000000 0.050000
+              children [
+                DEF hip_visual CadShape {
+                  url "dae/hip.dae"
+                }
+              ]
+            }
+            HingeJoint {
+              jointParameters HingeJointParameters {
+                anchor 0.080000 0.000000 0.110000
+              }
+              device [
+                RotationalMotor {
+                  name "base2_to_leg1"
+                  maxVelocity 0.5
+                  minPosition -2.0
+                  maxPosition 2.0
+                  maxTorque 1000.0
+                }
+                PositionSensor {
+                  name "base2_to_leg1_sensor"
+                }
+              ]
+              endPoint Solid {
+                translation 0.080000 0.000000 0.110000
+                children [
+                  Pose {
+                    rotation 0.000000 1.000000 0.000000 1.600000
+                    children [
+                      USE joint_visual
+                    ]
+                  }
+                  HingeJoint {
+                    jointParameters HingeJointParameters {
+                      axis 0.000000 1.000000 0.000000
+                      anchor 0.075000 0.000000 0.000000
+                    }
+                    device [
+                      RotationalMotor {
+                        name "leg1_to_leg1_2"
+                        maxVelocity 0.5
+                        minPosition -2.0
+                        maxPosition 2.0
+                        maxTorque 1000.0
+                      }
+                      PositionSensor {
+                        name "leg1_to_leg1_2_sensor"
+                      }
+                    ]
+                    endPoint Solid {
+                      translation 0.075000 0.000000 0.000000
+                      children [
+                        Pose {
+                          translation 0.000000 0.000000 -0.035000
+                          children [
+                            USE joint2_visual
+                          ]
+                        }
+                        HingeJoint {
+                          jointParameters HingeJointParameters {
+                            axis 0.000000 0.000000 1.000000
+                            anchor 0.000000 0.000000 -0.050000
+                          }
+                          device [
+                            RotationalMotor {
+                              name "leg1_2_to_leg1_3"
+                              maxVelocity 0.5
+                              minPosition -2.0
+                              maxPosition 2.0
+                              maxTorque 1000.0
+                            }
+                            PositionSensor {
+                              name "leg1_2_to_leg1_3_sensor"
+                            }
+                          ]
+                          endPoint Solid {
+                            translation 0.000000 0.000000 -0.050000
+                            children [
+                              Pose {
+                                translation 0.000000 0.000000 -0.300000
+                                children [
+                                  DEF f_leg_visual CadShape {
+                                    url "dae/f_leg.dae"
+                                  }
+                                ]
+                              }
+                              HingeJoint {
+                                jointParameters HingeJointParameters {
+                                  anchor 0.000000 0.000000 -0.275000
+                                }
+                                device [
+                                  RotationalMotor {
+                                    name "leg1_3_to_leg1_4"
+                                    maxVelocity 0.5
+                                    minPosition -2.0
+                                    maxPosition 2.0
+                                    maxTorque 1000.0
+                                  }
+                                  PositionSensor {
+                                    name "leg1_3_to_leg1_4_sensor"
+                                  }
+                                ]
+                                endPoint Solid {
+                                  translation 0.000000 0.000000 -0.275000
+                                  children [
+                                    Pose {
+                                      translation 0.000000 0.000000 -0.275000
+                                      children [
+                                        DEF s_leg_visual CadShape {
+                                          url "dae/s_leg.dae"
+                                        }
+                                      ]
+                                    }
+                                    HingeJoint {
+                                      jointParameters HingeJointParameters {
+                                        anchor 0.000000 0.000000 -0.250000
+                                      }
+                                      device [
+                                        RotationalMotor {
+                                          name "leg1_4_to_r_foot"
+                                          maxVelocity 0.5
+                                          minPosition -2.0
+                                          maxPosition 2.0
+                                          maxTorque 1000.0
+                                        }
+                                        PositionSensor {
+                                          name "leg1_4_to_r_foot_sensor"
+                                        }
+                                      ]
+                                      endPoint Solid {
+                                        translation 0.000000 0.000000 -0.250000
+                                        children [
+                                          Pose {
+                                            translation 0.000000 -0.080000 -0.035000
+                                            children [
+                                              DEF foot_visual CadShape {
+                                                url "dae/foot.dae"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                        name "r_foot"
+                                        physics Physics {
+                                          density -1
+                                          mass 0.100000
+                                          centerOfMass [ 0.000000 0.000000 0.000000 ]
+                                          inertiaMatrix [
+                                            1.000000e-03 1.000000e-03 1.000000e-03
+                                            0.000000e+00 0.000000e+00 0.000000e+00
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  ]
+                                  name "leg1_4"
+                                  physics Physics {
+                                    density -1
+                                    mass 0.100000
+                                    centerOfMass [ 0.000000 0.000000 0.000000 ]
+                                    inertiaMatrix [
+                                      1.000000e-03 1.000000e-03 1.000000e-03
+                                      0.000000e+00 0.000000e+00 0.000000e+00
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                            name "leg1_3"
+                            physics Physics {
+                              density -1
+                              mass 0.100000
+                              centerOfMass [ 0.000000 0.000000 0.000000 ]
+                              inertiaMatrix [
+                                1.000000e-03 1.000000e-03 1.000000e-03
+                                0.000000e+00 0.000000e+00 0.000000e+00
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                      name "leg1_2"
+                      physics Physics {
+                        density -1
+                        mass 0.100000
+                        centerOfMass [ 0.000000 0.000000 0.000000 ]
+                        inertiaMatrix [
+                          1.000000e-03 1.000000e-03 1.000000e-03
+                          0.000000e+00 0.000000e+00 0.000000e+00
+                        ]
+                      }
+                    }
+                  }
+                ]
+                name "leg1"
+                physics Physics {
+                  density -1
+                  mass 0.100000
+                  centerOfMass [ 0.000000 0.000000 0.000000 ]
+                  inertiaMatrix [
+                    1.000000e-03 1.000000e-03 1.000000e-03
+                    0.000000e+00 0.000000e+00 0.000000e+00
+                  ]
+                }
+              }
+            }
+            HingeJoint {
+              jointParameters HingeJointParameters {
+                anchor -0.080000 0.000000 0.110000
+              }
+              device [
+                RotationalMotor {
+                  name "base2_to_leg2"
+                  maxVelocity 0.5
+                  minPosition -2.0
+                  maxPosition 2.0
+                  maxTorque 1000.0
+                }
+                PositionSensor {
+                  name "base2_to_leg2_sensor"
+                }
+              ]
+              endPoint Solid {
+                translation -0.080000 0.000000 0.110000
+                children [
+                  Pose {
+                    rotation 0.000000 -1.000000 0.000000 1.600000
+                    children [
+                      USE joint_visual
+                    ]
+                  }
+                  HingeJoint {
+                    jointParameters HingeJointParameters {
+                      axis 0.000000 1.000000 0.000000
+                      anchor -0.075000 0.000000 0.000000
+                    }
+                    device [
+                      RotationalMotor {
+                        name "leg2_to_leg2_2"
+                        maxVelocity 0.5
+                        minPosition -2.0
+                        maxPosition 2.0
+                        maxTorque 1000.0
+                      }
+                      PositionSensor {
+                        name "leg2_to_leg2_2_sensor"
+                      }
+                    ]
+                    endPoint Solid {
+                      translation -0.075000 0.000000 0.000000
+                      children [
+                        Pose {
+                          translation 0.000000 0.000000 -0.035000
+                          children [
+                            USE joint2_visual
+                          ]
+                        }
+                        HingeJoint {
+                          jointParameters HingeJointParameters {
+                            axis 0.000000 0.000000 1.000000
+                            anchor 0.000000 0.000000 -0.050000
+                          }
+                          device [
+                            RotationalMotor {
+                              name "leg2_2_to_leg2_3"
+                              maxVelocity 0.5
+                              minPosition -2.0
+                              maxPosition 2.0
+                              maxTorque 1000.0
+                            }
+                            PositionSensor {
+                              name "leg2_2_to_leg2_3_sensor"
+                            }
+                          ]
+                          endPoint Solid {
+                            translation 0.000000 0.000000 -0.050000
+                            children [
+                              Pose {
+                                translation 0.000000 0.000000 -0.300000
+                                children [
+                                  USE f_leg_visual
+                                ]
+                              }
+                              HingeJoint {
+                                jointParameters HingeJointParameters {
+                                  anchor 0.000000 0.000000 -0.275000
+                                }
+                                device [
+                                  RotationalMotor {
+                                    name "leg2_3_to_leg2_4"
+                                    maxVelocity 0.5
+                                    minPosition -2.0
+                                    maxPosition 2.0
+                                    maxTorque 1000.0
+                                  }
+                                  PositionSensor {
+                                    name "leg2_3_to_leg2_4_sensor"
+                                  }
+                                ]
+                                endPoint Solid {
+                                  translation 0.000000 0.000000 -0.275000
+                                  children [
+                                    Pose {
+                                      translation 0.000000 0.000000 -0.275000
+                                      children [
+                                        USE s_leg_visual
+                                      ]
+                                    }
+                                    HingeJoint {
+                                      jointParameters HingeJointParameters {
+                                        anchor 0.000000 0.000000 -0.250000
+                                      }
+                                      device [
+                                        RotationalMotor {
+                                          name "leg2_4_to_l_foot"
+                                          maxVelocity 0.5
+                                          minPosition -2.0
+                                          maxPosition 2.0
+                                          maxTorque 1000.0
+                                        }
+                                        PositionSensor {
+                                          name "leg2_4_to_l_foot_sensor"
+                                        }
+                                      ]
+                                      endPoint Solid {
+                                        translation 0.000000 0.000000 -0.250000
+                                        children [
+                                          Pose {
+                                            translation 0.000000 -0.080000 -0.035000
+                                            children [
+                                              USE foot_visual
+                                            ]
+                                          }
+                                        ]
+                                        name "l_foot"
+                                        physics Physics {
+                                          density -1
+                                          mass 0.100000
+                                          centerOfMass [ 0.000000 0.000000 0.000000 ]
+                                          inertiaMatrix [
+                                            1.000000e-03 1.000000e-03 1.000000e-03
+                                            0.000000e+00 0.000000e+00 0.000000e+00
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  ]
+                                  name "leg2_4"
+                                  physics Physics {
+                                    density -1
+                                    mass 0.100000
+                                    centerOfMass [ 0.000000 0.000000 0.000000 ]
+                                    inertiaMatrix [
+                                      1.000000e-03 1.000000e-03 1.000000e-03
+                                      0.000000e+00 0.000000e+00 0.000000e+00
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                            name "leg2_3"
+                            physics Physics {
+                              density -1
+                              mass 0.100000
+                              centerOfMass [ 0.000000 0.000000 0.000000 ]
+                              inertiaMatrix [
+                                1.000000e-03 1.000000e-03 1.000000e-03
+                                0.000000e+00 0.000000e+00 0.000000e+00
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                      name "leg2_2"
+                      physics Physics {
+                        density -1
+                        mass 0.100000
+                        centerOfMass [ 0.000000 0.000000 0.000000 ]
+                        inertiaMatrix [
+                          1.000000e-03 1.000000e-03 1.000000e-03
+                          0.000000e+00 0.000000e+00 0.000000e+00
+                        ]
+                      }
+                    }
+                  }
+                ]
+                name "leg2"
+                physics Physics {
+                  density -1
+                  mass 0.100000
+                  centerOfMass [ 0.000000 0.000000 0.000000 ]
+                  inertiaMatrix [
+                    1.000000e-03 1.000000e-03 1.000000e-03
+                    0.000000e+00 0.000000e+00 0.000000e+00
+                  ]
+                }
+              }
+            }
+          ]
+          name "base2"
+          physics Physics {
+            density -1
+            mass 0.100000
+            centerOfMass [ 0.000000 0.000000 0.000000 ]
+            inertiaMatrix [
+              1.000000e-03 1.000000e-03 1.000000e-03
+              0.000000e+00 0.000000e+00 0.000000e+00
+            ]
+          }
+        }
+      }
+    ]
+    name IS name
+    physics Physics {
+      density -1
+      mass 0.100000
+      centerOfMass [ 0.000000 0.000000 0.000000 ]
+      inertiaMatrix [
+        1.000000e-03 1.000000e-03 1.000000e-03
+        0.000000e+00 0.000000e+00 0.000000e+00
+      ]
+    }
+  }
+}

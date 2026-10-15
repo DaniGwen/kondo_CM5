@@ -4,3 +4,6 @@ __pycache__/
 *.log
 robot-env/
 .venv/
+webots/export_to_cm5.py
+webots/kondo_tensorboard
+webots/kondo_lifelike_stand.zip

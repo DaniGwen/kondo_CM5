@@ -1,13 +1,12 @@
-<!-- from https://github.com/ponta-mkii/roboticsAC/blob/master/KHR-3HV/urdf/khr.urdf -->
-
 <?xml version="1.0"?>
+<!-- from https://github.com/ponta-mkii/roboticsAC/blob/master/KHR-3HV/urdf/khr.urdf -->
 <robot name="khr">
 
   <!--base link-->
   <link name="base">
     <visual>
       <geometry>
-	<mesh filename="package://KHR-3HV/dae/body.dae"/>
+	<mesh filename="./dae/body.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0.8"/>
       <material name="gray">
@@ -20,7 +19,7 @@
   <link name="first_arm">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint.dae"/>
+        <mesh filename="./dae/joint.dae"/>
       </geometry>
       <origin rpy="0 1.6 0" xyz="0 0 0"/>
       <material name="gray">
@@ -40,7 +39,7 @@
   <link name="first_arm_2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint2.dae"/>
+        <mesh filename="./dae/joint2.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.035"/>
       <material name="gray">
@@ -59,7 +58,7 @@
   <link name="first_arm_3">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/f_arm.dae"/>
+        <mesh filename="./dae/f_arm.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.3"/>
       <material name="gray">
@@ -79,7 +78,7 @@
   <link name="arm2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint.dae"/>
+        <mesh filename="./dae/joint.dae"/>
       </geometry>
       <origin rpy="0 -1.6 0" xyz="0 0 0"/>
       <material name="gray">
@@ -98,7 +97,7 @@
   <link name="arm2_2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint2.dae"/>
+        <mesh filename="./dae/joint2.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.035"/>
       <material name="gray">
@@ -117,7 +116,7 @@
   <link name="arm2_3">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/f_arm.dae"/>
+        <mesh filename="./dae/f_arm.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.3"/>
       <material name="gray">
@@ -136,7 +135,7 @@
   <link name="base2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/hip.dae"/>
+        <mesh filename="./dae/hip.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0.05"/>
       <material name="black2">
@@ -156,7 +155,7 @@
   <link name="leg1">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint.dae"/>
+        <mesh filename="./dae/joint.dae"/>
       </geometry>
       <origin rpy="0 1.6 0" xyz="0 0 0"/>
       <material name="gray">
@@ -175,7 +174,7 @@
   <link name="leg1_2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint2.dae"/>
+        <mesh filename="./dae/joint2.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.035"/>
       <material name="gray">
@@ -194,7 +193,7 @@
   <link name="leg1_3">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/f_leg.dae"/>
+        <mesh filename="./dae/f_leg.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.3"/>
       <material name="gray">
@@ -213,7 +212,7 @@
   <link name="leg1_4">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/s_leg.dae"/>
+        <mesh filename="./dae/s_leg.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.275"/>
       <material name="gray">
@@ -232,7 +231,7 @@
   <link name="r_foot">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/foot.dae"/>
+        <mesh filename="./dae/foot.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 -0.08 -0.035"/>
       <material name="gray">
@@ -241,7 +240,7 @@
   </link>
 
   <joint name="leg1_4_to_r_foot" type="revolute">
-    <parent link="leg1_4"/>e 
+    <parent link="leg1_4"/>
     <child link="r_foot"/>
     <axis xyz="1 0 0"/>
     <origin xyz="0 0 -0.25"/>
@@ -252,7 +251,7 @@
   <link name="leg2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint.dae"/>
+        <mesh filename="./dae/joint.dae"/>
       </geometry>
       <origin rpy="0 -1.6 0" xyz="0 0 0"/>
       <material name="gray">
@@ -271,7 +270,7 @@
   <link name="leg2_2">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/joint2.dae"/>
+        <mesh filename="./dae/joint2.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.035"/>
       <material name="gray">
@@ -290,7 +289,7 @@
   <link name="leg2_3">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/f_leg.dae"/>
+        <mesh filename="./dae/f_leg.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.3"/>
       <material name="gray">
@@ -309,7 +308,7 @@
   <link name="leg2_4">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/s_leg.dae"/>
+        <mesh filename="./dae/s_leg.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 -0.275"/>
       <material name="gray">
@@ -328,7 +327,7 @@
   <link name="l_foot">
     <visual>
       <geometry>
-        <mesh filename="package://KHR-3HV/dae/foot.dae"/>
+        <mesh filename="./dae/foot.dae"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 -0.08 -0.035"/>
       <material name="gray">
