@@ -102,7 +102,10 @@ if __name__ == "__main__":
         name_prefix="kondo_stand_td3"
     )
     
-    model.learn(total_timesteps=2000000, callback=checkpoint_callback, reset_num_timesteps=False)
+    try:
+        model.learn(total_timesteps=2000000, callback=checkpoint_callback, reset_num_timesteps=False)
+    except KeyboardInterrupt:
+        print("\nTraining manually interrupted by user. Saving current progress...")
     
     # 3. Update the final save target
     model.save("kondo_td3_final")
