@@ -7,3 +7,4 @@ robot-env/
 webots/export_to_cm5.py
 webots/kondo_tensorboard
 webots/kondo_lifelike_stand.zip
+webots/checkpoints

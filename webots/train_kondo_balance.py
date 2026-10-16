@@ -4,13 +4,16 @@ import numpy as np
 import socket
 import struct
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 class KondoBalanceEnv(gym.Env):
     def __init__(self):
         super(KondoBalanceEnv, self).__init__()
         
-        # Action space: Micro-adjustments for 12 leg joints
-        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(12,), dtype=np.float32)
+       # 12 leg joints limited to +/- 0.1. 2 shoulder joints given +/- 0.5 to swing.
+        low_bounds = np.array([-0.1]*12 + [-0.2, -0.2, -0.2, -0.2], dtype=np.float32)
+        high_bounds = np.array([ 0.1]*12 + [ 0.2,  0.2,  0.2,  0.2], dtype=np.float32)
+        self.action_space = spaces.Box(low=low_bounds, high=high_bounds, shape=(16,), dtype=np.float32)
         
         # Observation space: 3 Accel + 3 Gyro = 6 floats
         self.observation_space = spaces.Box(low=-10.0, high=10.0, shape=(6,), dtype=np.float32)
@@ -20,8 +23,8 @@ class KondoBalanceEnv(gym.Env):
         self.sock.connect(("127.0.0.1", 5555))
 
     def step(self, action):
-        # Send action to Webots (12 doubles)
-        action_data = struct.pack('12d', *action)
+        # Send action to Webots (16 doubles)
+        action_data = struct.pack('16d', *action)
         self.sock.send(action_data)
         
         # Receive new state from Webots (6 doubles = 48 bytes)
@@ -31,13 +34,15 @@ class KondoBalanceEnv(gym.Env):
         # Extract IMU data
         accel_x, accel_y, accel_z = state[0], state[1], state[2]
         
-        # Reward: Maximize upright posture (Z accel near 9.81, X/Y near 0)
-        upright_reward = -abs(accel_x) - abs(accel_y)
-        energy_penalty = -0.1 * np.sum(np.square(action))
-        reward = upright_reward + energy_penalty
+        upright_reward = -2.0 * (abs(accel_x) + abs(accel_y))
         
-        # Done condition: The robot fell over
-        terminated = bool(accel_z < 5.0)
+        energy_penalty = -0.1 * np.sum(np.square(action))
+        flat_foot_penalty = -20.0 * (abs(action[5]) + abs(action[11]))
+        
+        reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty
+        
+        # Revert to 5.0 so the AI is allowed to experience extreme recovery angles
+        terminated = bool(accel_z < 7.0)
         truncated = False # Used if we had a maximum time limit
         
         return state, float(reward), terminated, truncated, {}
@@ -45,8 +50,8 @@ class KondoBalanceEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         
-        # Send the secret reset signal to Webots (twelve 999.0s)
-        reset_signal = struct.pack('12d', *([999.0] * 12))
+        # Send the secret reset signal to Webots (sixteen 999.0s)
+        reset_signal = struct.pack('16d', *([999.0] * 16))
         self.sock.send(reset_signal)
         
         # Read the immediate zero-state back so the TCP ping-pong stays in sync
@@ -61,8 +66,14 @@ if __name__ == "__main__":
     print("Initializing PPO Training...")
     model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./kondo_tensorboard/")
     
-    # Train the robot to balance
-    model.learn(total_timesteps=100000)
+    # Save a backup model every 100,000 steps
+    checkpoint_callback = CheckpointCallback(
+        save_freq=100000, 
+        save_path="./checkpoints/",
+        name_prefix="kondo_stand"
+    )
     
-    # Save the PyTorch model for eventual ONNX export to the CM5
-    model.save("kondo_lifelike_stand")
+    # Train for 2 Million steps (approx. 1.5 to 2 hours)
+    model.learn(total_timesteps=2000000, callback=checkpoint_callback)
+    
+    model.save("kondo_lifelike_stand_final")
