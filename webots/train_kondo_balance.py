@@ -9,6 +9,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 class KondoBalanceEnv(gym.Env):
     def __init__(self):
         super(KondoBalanceEnv, self).__init__()
+        self.current_step = 0
         
        # 12 leg joints limited to +/- 0.1. 2 shoulder joints given +/- 0.5 to swing.
         low_bounds = np.array([-0.1]*12 + [-0.2, -0.2, -0.2, -0.2], dtype=np.float32)
@@ -23,6 +24,8 @@ class KondoBalanceEnv(gym.Env):
         self.sock.connect(("127.0.0.1", 5555))
 
     def step(self, action):
+        self.current_step += 1
+        
         # Send action to Webots (16 doubles)
         action_data = struct.pack('16d', *action)
         self.sock.send(action_data)
@@ -41,14 +44,18 @@ class KondoBalanceEnv(gym.Env):
         
         reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty
         
-        # Revert to 5.0 so the AI is allowed to experience extreme recovery angles
-        terminated = bool(accel_z < 7.0)
+        if self.current_step > 15:
+            terminated = bool(accel_z < 7.0)
+        else:
+            terminated = False
+            
         truncated = False # Used if we had a maximum time limit
         
         return state, float(reward), terminated, truncated, {}
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        self.current_step = 0
         
         # Send the secret reset signal to Webots (sixteen 999.0s)
         reset_signal = struct.pack('16d', *([999.0] * 16))
