@@ -75,21 +75,19 @@ if __name__ == "__main__":
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
     
-    model_path = "kondo_lifelike_stand_final.zip"
+    model_path = "kondo_td3_final.zip"
     
-    # Check if a previous training session exists
     if os.path.exists(model_path):
         print("Found existing brain! Loading old learnings and resuming training...")
-        # Load the existing weights and attach our current environment and noise
+        # 2. Update the load target
         model = TD3.load(
-            "kondo_lifelike_stand_final", 
+            "kondo_td3_final", 
             env=env, 
             action_noise=action_noise, 
             tensorboard_log="./kondo_tensorboard/"
         )
     else:
         print("No existing brain found. Initializing new TD3 Training...")
-        # Create a brand new brain
         model = TD3(
             "MlpPolicy", 
             env, 
@@ -98,14 +96,13 @@ if __name__ == "__main__":
             tensorboard_log="./kondo_tensorboard/"
         )
     
-    # Save a backup model every 100,000 steps
     checkpoint_callback = CheckpointCallback(
         save_freq=100000, 
         save_path="./checkpoints/",
         name_prefix="kondo_stand_td3"
     )
     
-    # Train for 2 Million steps (approx. 1.5 to 2 hours)
-    model.learn(total_timesteps=2000000, callback=checkpoint_callback)
+    model.learn(total_timesteps=2000000, callback=checkpoint_callback, reset_num_timesteps=False)
     
-    model.save("kondo_lifelike_stand_final")
+    # 3. Update the final save target
+    model.save("kondo_td3_final")
