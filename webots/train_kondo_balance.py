@@ -2,9 +2,11 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import socket
+import os
 import struct
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC, TD3
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.noise import NormalActionNoise
 
 class KondoBalanceEnv(gym.Env):
     def __init__(self):
@@ -45,7 +47,7 @@ class KondoBalanceEnv(gym.Env):
         reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty
         
         if self.current_step > 15:
-            terminated = bool(accel_z < 7.0)
+            terminated = bool(accel_z < 3.0)
         else:
             terminated = False
             
@@ -70,14 +72,37 @@ class KondoBalanceEnv(gym.Env):
 if __name__ == "__main__":
     env = KondoBalanceEnv()
     
-    print("Initializing PPO Training...")
-    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./kondo_tensorboard/")
+    n_actions = env.action_space.shape[-1]
+    action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
+    
+    model_path = "kondo_lifelike_stand_final.zip"
+    
+    # Check if a previous training session exists
+    if os.path.exists(model_path):
+        print("Found existing brain! Loading old learnings and resuming training...")
+        # Load the existing weights and attach our current environment and noise
+        model = TD3.load(
+            "kondo_lifelike_stand_final", 
+            env=env, 
+            action_noise=action_noise, 
+            tensorboard_log="./kondo_tensorboard/"
+        )
+    else:
+        print("No existing brain found. Initializing new TD3 Training...")
+        # Create a brand new brain
+        model = TD3(
+            "MlpPolicy", 
+            env, 
+            action_noise=action_noise, 
+            verbose=1, 
+            tensorboard_log="./kondo_tensorboard/"
+        )
     
     # Save a backup model every 100,000 steps
     checkpoint_callback = CheckpointCallback(
         save_freq=100000, 
         save_path="./checkpoints/",
-        name_prefix="kondo_stand"
+        name_prefix="kondo_stand_td3"
     )
     
     # Train for 2 Million steps (approx. 1.5 to 2 hours)
