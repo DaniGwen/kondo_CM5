@@ -40,19 +40,23 @@ class KondoBalanceEnv(gym.Env):
         accel_x, accel_y, accel_z = state[0], state[1], state[2]
         
         upright_reward = -2.0 * (abs(accel_x) + abs(accel_y))
-        
         energy_penalty = -0.1 * np.sum(np.square(action))
         flat_foot_penalty = -20.0 * (abs(action[5]) + abs(action[11]))
         
         reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty
         
+        # 1. Termination (Death by falling over)
         if self.current_step > 15:
-            terminated = bool(accel_z < 3.0)
+            terminated = bool(accel_z < 5.0)
         else:
             terminated = False
             
-        truncated = False # Used if we had a maximum time limit
-        
+        # 2. Truncation (Victory by surviving 1500 steps)
+        truncated = False
+        if self.current_step >= 1500:
+            truncated = True
+            reward += 1000.0  # Massive score injection to reinforce perfect balance
+            
         return state, float(reward), terminated, truncated, {}
 
     def reset(self, seed=None, options=None):
