@@ -109,3 +109,4 @@ if __name__ == "__main__":
     
     # 3. Update the final save target
     model.save("kondo_td3_final")
+    print("Brain saved successfully.")
