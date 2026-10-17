@@ -12,6 +12,7 @@ class KondoBalanceEnv(gym.Env):
     def __init__(self):
         super(KondoBalanceEnv, self).__init__()
         self.current_step = 0
+        self.previous_action = np.zeros(16, dtype=np.float32)
         
        # 12 leg joints limited to +/- 0.1. 2 shoulder joints given +/- 0.5 to swing.
         low_bounds = np.array([-0.1]*12 + [-0.2, -0.2, -0.2, -0.2], dtype=np.float32)
@@ -43,6 +44,17 @@ class KondoBalanceEnv(gym.Env):
         energy_penalty = -0.1 * np.sum(np.square(action))
         flat_foot_penalty = -20.0 * (abs(action[5]) + abs(action[11]))
         
+        # --- THE SMOOTHNESS PENALTY ---
+        # Calculate how violently the AI tried to change the joint angles
+        action_delta = action - self.previous_action
+        smoothness_penalty = -15.0 * np.sum(np.square(action_delta))
+        
+        # Update the memory for the next frame
+        self.previous_action = np.copy(action)
+        
+        # Add it to the total reward
+        reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty + smoothness_penalty
+        
         reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty
         
         # 1. Termination (Death by falling over)
@@ -62,6 +74,7 @@ class KondoBalanceEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.current_step = 0
+        self.previous_action = np.zeros(16, dtype=np.float32)
         
         # Send the secret reset signal to Webots (sixteen 999.0s)
         reset_signal = struct.pack('16d', *([999.0] * 16))
