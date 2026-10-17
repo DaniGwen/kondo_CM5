@@ -47,7 +47,7 @@ class KondoBalanceEnv(gym.Env):
         
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
-            terminated = bool(accel_z < 5.0)
+            terminated = bool(accel_z < 2.0)
         else:
             terminated = False
             
