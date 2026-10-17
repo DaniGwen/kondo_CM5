@@ -55,11 +55,9 @@ class KondoBalanceEnv(gym.Env):
         # Add it to the total reward
         reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty + smoothness_penalty
         
-        reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty
-        
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
-            terminated = bool(accel_z < 2.0)
+            terminated = bool(accel_z < 1.0)
         else:
             terminated = False
             
