@@ -45,13 +45,13 @@ while True:
 
     # --- C. Write to Muscles (pykondo) ---
     target_angles = []
-    for i in range(16):
+    for i in range(len(actions)):
         # Convert safely bounded radians directly to degrees
         degrees = actions[i] * 57.2958
         target_angles.append(degrees)
     
-    # Send the converted degrees to the 16 physical servos
-    kondo.set_angles(servo_ids, target_angles, 1.0) 
+    # Send the converted degrees to the active physical servos
+    kondo.set_angles(servo_ids[:len(actions)], target_angles, 1.0)
 
     # --- D. Maintain exactly 16ms per frame ---
     elapsed = time.perf_counter() - start_time
