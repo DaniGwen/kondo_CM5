@@ -74,9 +74,9 @@ class KondoBalanceEnv(gym.Env):
             terminated = False
             self.fall_counter = 0
             
-        # 2. Truncation (Victory by surviving 1500 steps)
+        # 2. Truncation (Victory by surviving 2000 steps)
         truncated = False
-        if self.current_step >= 1500:
+        if self.current_step >= 3000:
             truncated = True
             reward += 1000.0
             print(f"\n🏆 GOAL ACHIEVED! Balanced for {self.current_step} steps! 🏆\n")
