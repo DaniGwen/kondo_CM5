@@ -13,12 +13,12 @@ class KondoBalanceEnv(gym.Env):
         super(KondoBalanceEnv, self).__init__()
         self.current_step = 0
         self.fall_counter = 0
-        self.previous_action = np.zeros(16, dtype=np.float32)
+        self.previous_action = np.zeros(14, dtype=np.float32)
         
-       # 12 leg joints limited to +/- 0.1. 2 shoulder joints given +/- 0.5 to swing.
-        low_bounds = np.array([-0.1]*12 + [-0.2, -0.2, -0.2, -0.2], dtype=np.float32)
-        high_bounds = np.array([ 0.1]*12 + [ 0.2,  0.2,  0.2,  0.2], dtype=np.float32)
-        self.action_space = spaces.Box(low=low_bounds, high=high_bounds, shape=(16,), dtype=np.float32)
+        # 12 leg joints limited to +/- 0.1. 2 shoulder joints limited to +/- 0.2.
+        low_bounds = np.array([-0.1]*12 + [-0.2, -0.2], dtype=np.float32)
+        high_bounds = np.array([ 0.1]*12 + [ 0.2,  0.2], dtype=np.float32)
+        self.action_space = spaces.Box(low=low_bounds, high=high_bounds, shape=(14,), dtype=np.float32)
         
         # Observation space: 3 Accel + 3 Gyro = 6 floats
         self.observation_space = spaces.Box(low=-10.0, high=10.0, shape=(6,), dtype=np.float32)
@@ -30,31 +30,37 @@ class KondoBalanceEnv(gym.Env):
     def step(self, action):
         self.current_step += 1
         
-        # Send action to Webots (16 doubles)
-        action_data = struct.pack('16d', *action)
+        # Send action to Webots (14 doubles)
+        action_data = struct.pack('14d', *action)
         self.sock.send(action_data)
         
         # Receive new state from Webots (6 doubles = 48 bytes)
         data = self.sock.recv(48)
         state = np.array(struct.unpack('6d', data), dtype=np.float32)
         
-        # Extract IMU data
+        # Extract IMU data (Accel X, Y, Z, Gyro Roll, Pitch, Yaw implied or standard state layout)
         accel_x, accel_y, accel_z = state[0], state[1], state[2]
+        gyro_roll, gyro_pitch = state[3], state[4]
         
         upright_reward = -2.0 * (abs(accel_x) + abs(accel_y))
-        energy_penalty = -0.1 * np.sum(np.square(action))
-        flat_foot_penalty = -20.0 * (abs(action[5]) + abs(action[11]))
+        energy_penalty = -0.05 * np.sum(np.square(action))
         
-        # --- THE SMOOTHNESS PENALTY ---
-        # Calculate how violently the AI tried to change the joint angles
+        # --- HEAVY ANTI-TWITCH & ADAPTIVE SMOOTHNESS PENALTY ---
         action_delta = action - self.previous_action
-        smoothness_penalty = -15.0 * np.sum(np.square(action_delta))
         
-        # Update the memory for the next frame
+        # Measure disturbance magnitude from IMU sensors
+        disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
+        
+        # When stable (low disturbance), smoothness penalty is extremely harsh (-120.0).
+        # When disturbed, penalty scales down so the robot can make fast corrections.
+        dynamic_smoothness_weight = max(10.0, 120.0 - (disturbance * 40.0))
+        smoothness_penalty = -dynamic_smoothness_weight * np.sum(np.square(action_delta))
+        
+        # Update action memory
         self.previous_action = np.copy(action)
         
-        # Add it to the total reward
-        reward = 5.0 + upright_reward + energy_penalty + flat_foot_penalty + smoothness_penalty
+        # Total reward calculation
+        reward = 5.0 + upright_reward + energy_penalty + smoothness_penalty
         
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
@@ -63,7 +69,6 @@ class KondoBalanceEnv(gym.Env):
             else:
                 self.fall_counter = 0
             
-            # The robot must stay tilted/falling for 5 consecutive frames (80ms) to die
             terminated = bool(self.fall_counter >= 5)
         else:
             terminated = False
@@ -73,8 +78,8 @@ class KondoBalanceEnv(gym.Env):
         truncated = False
         if self.current_step >= 1500:
             truncated = True
-            reward += 1000.0  # Massive score injection to reinforce perfect balance
-            print(f"\n🏆 GOAL ACHIEVED! The AI successfully balanced for {self.current_step} steps! 🏆\n")
+            reward += 1000.0
+            print(f"\n🏆 GOAL ACHIEVED! Balanced for {self.current_step} steps! 🏆\n")
             
         return state, float(reward), terminated, truncated, {}
 
@@ -82,13 +87,12 @@ class KondoBalanceEnv(gym.Env):
         super().reset(seed=seed)
         self.current_step = 0
         self.fall_counter = 0
-        self.previous_action = np.zeros(16, dtype=np.float32)
+        self.previous_action = np.zeros(14, dtype=np.float32)
         
-        # Send the secret reset signal to Webots (sixteen 999.0s)
-        reset_signal = struct.pack('16d', *([999.0] * 16))
+        # Send reset signal to Webots (fourteen 999.0s)
+        reset_signal = struct.pack('14d', *([999.0] * 14))
         self.sock.send(reset_signal)
         
-        # Read the immediate zero-state back so the TCP ping-pong stays in sync
         data = self.sock.recv(48)
         state = np.array(struct.unpack('6d', data), dtype=np.float32)
         
@@ -100,28 +104,27 @@ if __name__ == "__main__":
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.02 * np.ones(n_actions))
     
-    model_path = "kondo_td3_final.zip"
+    model_path = "kondo_td3_smooth.zip"
     
     if os.path.exists(model_path):
-        print("Found existing brain! Loading old learnings and resuming fine-tuning...")
+        print("Found existing smooth model! Resuming training...")
         model = TD3.load(
-            "kondo_td3_final", 
+            "kondo_td3_smooth", 
             env=env, 
             action_noise=action_noise, 
-            # 2. Add these specific hyperparameter overrides to the load function
             custom_objects={
-                "learning_rate": 0.0003, # Reduced from 0.001 to lock in the policy
-                "batch_size": 1024       # Look at 4x more memories before updating (default 256)
+                "learning_rate": 0.0003,
+                "batch_size": 1024
             },
             tensorboard_log="./kondo_tensorboard/"
         )
     else:
-        print("No existing brain found. Initializing new TD3 Training...")
+        print("Initializing new TD3 Training with Smoothness Constraints...")
         model = TD3(
             "MlpPolicy", 
             env, 
             action_noise=action_noise, 
-            learning_rate=0.0003,        # Match the overrides here for new models
+            learning_rate=0.0003,
             batch_size=1024,
             verbose=1, 
             tensorboard_log="./kondo_tensorboard/"
@@ -130,14 +133,13 @@ if __name__ == "__main__":
     checkpoint_callback = CheckpointCallback(
         save_freq=100000, 
         save_path="./checkpoints/",
-        name_prefix="kondo_stand_td3"
+        name_prefix="kondo_smooth_td3"
     )
     
     try:
         model.learn(total_timesteps=2000000, callback=checkpoint_callback, reset_num_timesteps=False)
     except KeyboardInterrupt:
-        print("\nTraining manually interrupted by user. Saving current progress...")
+        print("\nTraining interrupted. Saving current progress...")
     
-    # 3. Update the final save target
-    model.save("kondo_td3_final")
-    print("Brain saved successfully.")
+    model.save("kondo_td3_smooth")
+    print("Smooth brain saved successfully.")
