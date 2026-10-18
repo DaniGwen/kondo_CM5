@@ -88,17 +88,21 @@ if __name__ == "__main__":
     env = KondoBalanceEnv()
     
     n_actions = env.action_space.shape[-1]
-    action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
+    action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.02 * np.ones(n_actions))
     
     model_path = "kondo_td3_final.zip"
     
     if os.path.exists(model_path):
-        print("Found existing brain! Loading old learnings and resuming training...")
-        # 2. Update the load target
+        print("Found existing brain! Loading old learnings and resuming fine-tuning...")
         model = TD3.load(
             "kondo_td3_final", 
             env=env, 
             action_noise=action_noise, 
+            # 2. Add these specific hyperparameter overrides to the load function
+            custom_objects={
+                "learning_rate": 0.0003, # Reduced from 0.001 to lock in the policy
+                "batch_size": 1024       # Look at 4x more memories before updating (default 256)
+            },
             tensorboard_log="./kondo_tensorboard/"
         )
     else:
@@ -107,6 +111,8 @@ if __name__ == "__main__":
             "MlpPolicy", 
             env, 
             action_noise=action_noise, 
+            learning_rate=0.0003,        # Match the overrides here for new models
+            batch_size=1024,
             verbose=1, 
             tensorboard_log="./kondo_tensorboard/"
         )
