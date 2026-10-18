@@ -74,6 +74,7 @@ class KondoBalanceEnv(gym.Env):
         if self.current_step >= 1500:
             truncated = True
             reward += 1000.0  # Massive score injection to reinforce perfect balance
+            print(f"\n🏆 GOAL ACHIEVED! The AI successfully balanced for {self.current_step} steps! 🏆\n")
             
         return state, float(reward), terminated, truncated, {}
 
