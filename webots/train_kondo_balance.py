@@ -12,6 +12,7 @@ class KondoBalanceEnv(gym.Env):
     def __init__(self):
         super(KondoBalanceEnv, self).__init__()
         self.current_step = 0
+        self.fall_counter = 0
         self.previous_action = np.zeros(16, dtype=np.float32)
         
        # 12 leg joints limited to +/- 0.1. 2 shoulder joints given +/- 0.5 to swing.
@@ -57,9 +58,16 @@ class KondoBalanceEnv(gym.Env):
         
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
-            terminated = bool(accel_z < 1.0)
+            if accel_z < 2.0:
+                self.fall_counter += 1
+            else:
+                self.fall_counter = 0
+            
+            # The robot must stay tilted/falling for 5 consecutive frames (80ms) to die
+            terminated = bool(self.fall_counter >= 5)
         else:
             terminated = False
+            self.fall_counter = 0
             
         # 2. Truncation (Victory by surviving 1500 steps)
         truncated = False
@@ -72,6 +80,7 @@ class KondoBalanceEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.current_step = 0
+        self.fall_counter = 0
         self.previous_action = np.zeros(16, dtype=np.float32)
         
         # Send the secret reset signal to Webots (sixteen 999.0s)
