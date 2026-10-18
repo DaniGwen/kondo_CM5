@@ -1,5 +1,6 @@
 import sys
 import os
+# Add the cython folder to the Python path so it can find pykondo.so
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cython')))
 
 import time
@@ -16,18 +17,18 @@ if kondo.init() < 0:
 
 print("Brain online. Taking over hardware control.")
 
-# The physical Kondo KHR-3HV servo IDs (excluding Head ID 0)
-# 1-4: Arms | 5-10: Right Leg | 11-16: Left Leg
+# Ensure these 16 IDs match the exact order your AI expects the joints
 servo_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 while True:
     start_time = time.perf_counter()
 
     # --- A. Read Senses (via RCB-4) ---
-    raw_gyro_pitch = kondo.read_analog(1) 
-    raw_gyro_roll  = kondo.read_analog(2) 
-    raw_accel_z    = kondo.read_analog(3) 
-    raw_accel_y    = kondo.read_analog(4) 
+    # The [1] extracts the actual analog value from the (status, value) tuple
+    raw_gyro_pitch = kondo.read_analog(1)[1] 
+    raw_gyro_roll  = kondo.read_analog(2)[1] 
+    raw_accel_z    = kondo.read_analog(3)[1] 
+    raw_accel_y    = kondo.read_analog(4)[1] 
 
     # Convert to rad/s and m/s^2 using your custom zero-points and multipliers
     gyro_pitch_rads = (raw_gyro_pitch - 286) * 0.127  
