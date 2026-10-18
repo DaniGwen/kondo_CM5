@@ -1,3 +1,4 @@
+print("DEBUG: Python script started successfully!")
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cython')))
@@ -7,9 +8,12 @@ import numpy as np
 import onnxruntime as ort
 from pykondo import Kondo
 
+print("DEBUG: Modules imported successfully!")
+
 session = ort.InferenceSession("kondo_balance.onnx")
 
 kondo = Kondo()
+print("DEBUG: Kondo object created. Initializing RCB-4...")
 if kondo.init() < 0:
     print("Failed to initialize RCB-4 connection.")
     exit()
