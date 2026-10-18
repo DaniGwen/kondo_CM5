@@ -131,7 +131,7 @@ if __name__ == "__main__":
         )
     
     checkpoint_callback = CheckpointCallback(
-        save_freq=70000, 
+        save_freq=50000, 
         save_path="./checkpoints/",
         name_prefix="kondo_smooth_td3"
     )
