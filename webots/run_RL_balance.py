@@ -1,4 +1,3 @@
-print("DEBUG: Python script started successfully!")
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cython')))
@@ -8,19 +7,23 @@ import numpy as np
 import onnxruntime as ort
 from pykondo import Kondo
 
-print("DEBUG: Modules imported successfully!")
-
-session = ort.InferenceSession("kondo_balance.onnx")
+session = ort.InferenceSession("kondo_actor.onnx")
 
 kondo = Kondo()
-print("DEBUG: Kondo object created. Initializing RCB-4...")
 if kondo.init() < 0:
     print("Failed to initialize RCB-4 connection.")
     exit()
 
-print("Brain online. Taking over hardware control (Optimized Round-Robin).")
+print("Brain online. Initiating soft-start sequence with correct servo IDs...")
 
-servo_ids = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] # Adjust to your 12 leg servos
+# Correct Kondo KHR-3HV ID Mapping:
+# [6 Right Leg joints (5-10), 6 Left Leg joints (5-10), 2 Shoulders (ID 1), 2 Elbows (ID 3)]
+servo_ids = [
+    5, 6, 7, 8, 9, 10,  # Right Leg
+    5, 6, 7, 8, 9, 10,  # Left Leg
+    1, 1,               # Right & Left Shoulders
+    3, 3                # Right & Left Elbows
+]
 
 # Cached sensor values
 gyro_pitch = 286
@@ -29,6 +32,8 @@ accel_z    = 306
 accel_y    = 341
 
 poll_counter = 0
+frame_count = 0
+ramp_duration_frames = 60  # Smooth 1-second soft-start ramp
 
 while True:
     start_time = time.perf_counter()
@@ -64,10 +69,19 @@ while True:
     # --- B. Think (ONNX) ---
     actions = session.run(["joint_actions"], {"imu_state": imu_state})[0][0]
 
-    # --- C. Write to Muscles (pykondo) ---
+    # --- C. Write to Muscles with Soft-Start Ramp ---
     target_angles = []
+    
+    # Smooth ramp factor from 0.0 to 1.0 over the first 60 frames
+    if frame_count < ramp_duration_frames:
+        ramp_factor = float(frame_count) / float(ramp_duration_frames)
+        frame_count += 1
+    else:
+        ramp_factor = 1.0
+
     for i in range(len(actions)):
-        degrees = actions[i] * 57.2958
+        safe_action = actions[i] * ramp_factor
+        degrees = safe_action * 57.2958
         target_angles.append(degrees)
     
     kondo.set_angles(servo_ids[:len(actions)], target_angles, 1.0) 
