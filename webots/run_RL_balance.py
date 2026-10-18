@@ -7,7 +7,7 @@ import numpy as np
 import onnxruntime as ort
 from pykondo import Kondo
 
-session = ort.InferenceSession("kondo_actor.onnx")
+session = ort.InferenceSession("kondo_balance.onnx")
 
 kondo = Kondo()
 if kondo.init() < 0:
