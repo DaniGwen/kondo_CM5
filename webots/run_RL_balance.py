@@ -1,6 +1,11 @@
 import time
+import sys
+from pathlib import Path
 import numpy as np
 import onnxruntime as ort
+
+# Allow importing the project-local pykondo module from the repository root.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pykondo import Kondo
 
 session = ort.InferenceSession("kondo_actor.onnx")
