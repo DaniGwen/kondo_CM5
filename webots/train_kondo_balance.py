@@ -64,9 +64,15 @@ class KondoBalanceEnv(gym.Env):
             # 🧍 STABLE: Penalize unnecessary joint movement to force a stiff, upright stand
             flexion_reward = -1.5 * hip_knee_movement
 
-        # --- HEAVY ANTI-TWITCH & ADAPTIVE SMOOTHNESS PENALTY ---
+        # --- HEAVIER ANTI-TWITCH & ADAPTIVE SMOOTHNESS PENALTY ---
         action_delta = action - self.previous_action
-        dynamic_smoothness_weight = max(10.0, 120.0 - (disturbance * 40.0))
+        
+        # Measure disturbance magnitude from IMU sensors
+        disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
+        
+        # Increased base weight from 120.0 to 300.0, and minimum floor from 10.0 to 40.0.
+        # This makes micro-twitching intensely expensive for the network to produce.
+        dynamic_smoothness_weight = max(40.0, 300.0 - (disturbance * 50.0))
         smoothness_penalty = -dynamic_smoothness_weight * np.sum(np.square(action_delta))
         
         self.previous_action = np.copy(action)
