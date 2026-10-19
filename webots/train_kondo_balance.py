@@ -44,24 +44,31 @@ class KondoBalanceEnv(gym.Env):
         
         upright_reward = -2.0 * (abs(accel_x) + abs(accel_y))
         
-        # --- CONDITIONAL MOVEMENT REWARD/PENALTY ---
         # Measure disturbance magnitude from IMU sensors
         disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
         
-        # Calculate the total magnitude of the robot's joint actions
-        total_movement = np.sum(np.abs(action))
+        # --- 1. HARSH SHOULDER PENALTY ---
+        # Shoulders are the last two joints in the 14-element array (indices 12 and 13)
+        shoulder_movement = np.sum(np.abs(action[12:14]))
+        shoulder_penalty = -5.0 * shoulder_movement  # Heavily penalize arm flapping
         
-        # Threshold defining the boundary between "normal range" and "pushed"
-        STABILITY_THRESHOLD = 0.8 
+        # --- 2. TARGETED LEG ARTICULATION ---
+        # Right leg pitch: 2 (Hip), 3 (Knee), 4 (Ankle)
+        # Left leg pitch: 8 (Hip), 9 (Knee), 10 (Ankle)
+        leg_pitch_joints = [2, 3, 4, 8, 9, 10]
+        leg_movement = np.sum(np.abs(action[leg_pitch_joints]))
+        
+        # Lowered threshold from 0.8 to 0.4 so the AI reacts to pushes sooner
+        STABILITY_THRESHOLD = 0.4 
         
         if disturbance > STABILITY_THRESHOLD:
-            # 💥 OUT OF RANGE (Pushed): Reward the robot for moving to compensate
-            reactive_reward = 2.5 * total_movement
+            # 💥 PUSHED: Specifically reward moving the hips, knees, and ankles
+            reactive_reward = 3.5 * leg_movement
         else:
-            # 🧍 NORMAL RANGE (Stable): Penalize the robot for twitching or moving unnecessarily
-            reactive_reward = -2.0 * total_movement
+            # 🧍 STABLE: Penalize leg movement to force an upright stance
+            reactive_reward = -2.0 * leg_movement
 
-        # --- ADAPTIVE SMOOTHNESS PENALTY (Anti-Jitter) ---
+        # --- ADAPTIVE SMOOTHNESS PENALTY ---
         action_delta = action - self.previous_action
         dynamic_smoothness_weight = max(40.0, 300.0 - (disturbance * 50.0))
         smoothness_penalty = -dynamic_smoothness_weight * np.sum(np.square(action_delta))
@@ -69,11 +76,11 @@ class KondoBalanceEnv(gym.Env):
         self.previous_action = np.copy(action)
         
         # Total reward calculation
-        reward = 5.0 + upright_reward + reactive_reward + smoothness_penalty
+        reward = 5.0 + upright_reward + reactive_reward + shoulder_penalty + smoothness_penalty
         
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
-            if accel_z < 2.0:
+            if accel_z < 3.0:
                 self.fall_counter += 1
             else:
                 self.fall_counter = 0
