@@ -38,29 +38,41 @@ class KondoBalanceEnv(gym.Env):
         data = self.sock.recv(48)
         state = np.array(struct.unpack('6d', data), dtype=np.float32)
         
-        # Extract IMU data (Accel X, Y, Z, Gyro Roll, Pitch, Yaw implied or standard state layout)
+        # Extract IMU data
         accel_x, accel_y, accel_z = state[0], state[1], state[2]
         gyro_roll, gyro_pitch = state[3], state[4]
         
         upright_reward = -2.0 * (abs(accel_x) + abs(accel_y))
         energy_penalty = -0.05 * np.sum(np.square(action))
         
-        # --- HEAVY ANTI-TWITCH & ADAPTIVE SMOOTHNESS PENALTY ---
-        action_delta = action - self.previous_action
+        # --- CONDITIONAL HIP, KNEE & ANKLE ARTICULATION ---
+        # Right leg pitch/flexion joints: indices 2 (ID7), 3 (ID8), 4 (ID9)
+        # Left leg pitch/flexion joints: indices 8 (ID7), 9 (ID8), 10 (ID9)
+        knee_hip_pitch_joints = [2, 3, 4, 8, 9, 10] 
+        hip_knee_movement = np.sum(np.abs(action[knee_hip_pitch_joints]))
         
         # Measure disturbance magnitude from IMU sensors
         disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
         
-        # When stable (low disturbance), smoothness penalty is extremely harsh (-120.0).
-        # When disturbed, penalty scales down so the robot can make fast corrections.
+        # Threshold defining when a push/hit is happening
+        PUSH_THRESHOLD = 0.8 
+        
+        if disturbance > PUSH_THRESHOLD:
+            # 💥 HIT DETECTED: Reward reactive bending to absorb the shock!
+            flexion_reward = 3.0 * hip_knee_movement
+        else:
+            # 🧍 STABLE: Penalize unnecessary joint movement to force a stiff, upright stand
+            flexion_reward = -1.5 * hip_knee_movement
+
+        # --- HEAVY ANTI-TWITCH & ADAPTIVE SMOOTHNESS PENALTY ---
+        action_delta = action - self.previous_action
         dynamic_smoothness_weight = max(10.0, 120.0 - (disturbance * 40.0))
         smoothness_penalty = -dynamic_smoothness_weight * np.sum(np.square(action_delta))
         
-        # Update action memory
         self.previous_action = np.copy(action)
         
         # Total reward calculation
-        reward = 5.0 + upright_reward + energy_penalty + smoothness_penalty
+        reward = 5.0 + upright_reward + flexion_reward + energy_penalty + smoothness_penalty
         
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
