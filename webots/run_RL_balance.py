@@ -91,23 +91,28 @@ while True:
     if abs(accel_y_ms2) > ACCEL_THRESHOLD:
         direction = 1.0 if accel_y_ms2 > 0 else -1.0
         intensity = min(1.0, (abs(accel_y_ms2) - ACCEL_THRESHOLD) / 8.0)
-        
-        angle_15_rad = 0.26 * direction * intensity
-        angle_5_rad  = 0.087 * direction * intensity
 
-        # ID 7: Hips (pitch)
-        reflex_bias[2] = angle_15_rad
-        reflex_bias[8] = angle_15_rad
+        rad_15 = 0.262 * direction * intensity
+        rad_10 = 0.175 * direction * intensity
+        rad_5  = 0.087 * direction * intensity
 
-        # ID 9: Ankles (pitch)
-        reflex_bias[4] = angle_5_rad
-        reflex_bias[10] = angle_5_rad
+        # Shoulders (ID 1)
+        reflex_bias[12] = rad_15
+        reflex_bias[13] = rad_15
 
-        # ID 1: Shoulders
-        reflex_bias[12] = angle_15_rad
-        reflex_bias[13] = angle_15_rad
+        # Hips (ID 7)
+        reflex_bias[2] = rad_10
+        reflex_bias[8] = rad_10
 
-    # --- E. Output to Servos ---
+        # Knees (ID 8) - bends backward
+        reflex_bias[3] = -rad_5
+        reflex_bias[9] = -rad_5
+
+        # Ankles (ID 9)
+        reflex_bias[4] = rad_10
+        reflex_bias[10] = rad_10
+
+    # Combine with EMA actions, scale through soft-start, and dispatch to RCB-4
     target_angles = []
     for i in range(len(filtered_actions)):
         total_action = (filtered_actions[i] + reflex_bias[i]) * ramp_factor
