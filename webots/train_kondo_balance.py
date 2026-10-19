@@ -13,7 +13,10 @@ class KondoBalanceEnv(gym.Env):
         super(KondoBalanceEnv, self).__init__()
         self.current_step = 0
         self.fall_counter = 0
-        self.previous_action = np.zeros(14, dtype=np.float32)
+        
+        # Track both raw and smoothed actions for the EMA filter
+        self.previous_raw_action = np.zeros(14, dtype=np.float32)
+        self.previous_smoothed_action = np.zeros(14, dtype=np.float32)
         
         # 12 leg joints limited to +/- 0.1. 2 shoulder joints limited to +/- 0.2.
         low_bounds = np.array([-0.1]*12 + [-0.2, -0.2], dtype=np.float32)
@@ -30,8 +33,13 @@ class KondoBalanceEnv(gym.Env):
     def step(self, action):
         self.current_step += 1
         
-        # Send action to Webots (14 doubles)
-        action_data = struct.pack('14d', *action)
+        # --- 1. ACTION FILTERING (The Anti-Twitch Engine) ---
+        SMOOTHING_ALPHA = 0.25 
+        smoothed_action = (SMOOTHING_ALPHA * action) + ((1.0 - SMOOTHING_ALPHA) * self.previous_smoothed_action)
+        self.previous_smoothed_action = np.copy(smoothed_action)
+        
+        # Send the SMOOTHED action to Webots (14 doubles)
+        action_data = struct.pack('14d', *smoothed_action)
         self.sock.send(action_data)
         
         # Receive new state from Webots (6 doubles = 48 bytes)
@@ -47,18 +55,17 @@ class KondoBalanceEnv(gym.Env):
         # Measure disturbance magnitude from IMU sensors
         disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
         
-        # --- 1. HARSH SHOULDER PENALTY ---
+        # --- 2. HARSH SHOULDER PENALTY ---
         # Shoulders are the last two joints in the 14-element array (indices 12 and 13)
-        shoulder_movement = np.sum(np.abs(action[12:14]))
+        shoulder_movement = np.sum(np.abs(action))
         shoulder_penalty = -5.0 * shoulder_movement  # Heavily penalize arm flapping
         
-        # --- 2. TARGETED LEG ARTICULATION ---
+        # --- 3. TARGETED LEG ARTICULATION ---
         # Right leg pitch: 2 (Hip), 3 (Knee), 4 (Ankle)
         # Left leg pitch: 8 (Hip), 9 (Knee), 10 (Ankle)
         leg_pitch_joints = [2, 3, 4, 8, 9, 10]
         leg_movement = np.sum(np.abs(action[leg_pitch_joints]))
         
-        # Lowered threshold from 0.8 to 0.4 so the AI reacts to pushes sooner
         STABILITY_THRESHOLD = 0.4 
         
         if disturbance > STABILITY_THRESHOLD:
@@ -68,17 +75,17 @@ class KondoBalanceEnv(gym.Env):
             # 🧍 STABLE: Penalize leg movement to force an upright stance
             reactive_reward = -2.0 * leg_movement
 
-        # --- ADAPTIVE SMOOTHNESS PENALTY ---
-        action_delta = action - self.previous_action
-        dynamic_smoothness_weight = max(40.0, 300.0 - (disturbance * 50.0))
-        smoothness_penalty = -dynamic_smoothness_weight * np.sum(np.square(action_delta))
+        # --- 4. HEAVY JITTER PENALTY ---
+        # Penalize the RAW action delta so the AI's "brain" is punished for trying to twitch
+        raw_action_delta = action - self.previous_raw_action
+        smoothness_penalty = -250.0 * np.sum(np.square(raw_action_delta))
         
-        self.previous_action = np.copy(action)
+        self.previous_raw_action = np.copy(action)
         
         # Total reward calculation
         reward = 5.0 + upright_reward + reactive_reward + shoulder_penalty + smoothness_penalty
         
-        # 1. Termination (Death by falling over)
+        # Termination (Death by falling over)
         if self.current_step > 15:
             if accel_z < 3.0:
                 self.fall_counter += 1
@@ -90,7 +97,7 @@ class KondoBalanceEnv(gym.Env):
             terminated = False
             self.fall_counter = 0
             
-        # 2. Truncation (Victory by surviving 4000 steps)
+        # Truncation (Victory by surviving 4000 steps)
         truncated = False
         if self.current_step >= 4000:
             truncated = True
@@ -103,7 +110,10 @@ class KondoBalanceEnv(gym.Env):
         super().reset(seed=seed)
         self.current_step = 0
         self.fall_counter = 0
-        self.previous_action = np.zeros(14, dtype=np.float32)
+        
+        # Reset tracking arrays for the EMA filter
+        self.previous_raw_action = np.zeros(14, dtype=np.float32)
+        self.previous_smoothed_action = np.zeros(14, dtype=np.float32)
         
         # Send reset signal to Webots (fourteen 999.0s)
         reset_signal = struct.pack('14d', *([999.0] * 14))
