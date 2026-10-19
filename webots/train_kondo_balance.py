@@ -43,42 +43,33 @@ class KondoBalanceEnv(gym.Env):
         gyro_roll, gyro_pitch = state[3], state[4]
         
         upright_reward = -2.0 * (abs(accel_x) + abs(accel_y))
-        energy_penalty = -0.05 * np.sum(np.square(action))
         
-        # --- CONDITIONAL HIP, KNEE & ANKLE ARTICULATION ---
-        # Right leg pitch/flexion joints: indices 2 (ID7), 3 (ID8), 4 (ID9)
-        # Left leg pitch/flexion joints: indices 8 (ID7), 9 (ID8), 10 (ID9)
-        knee_hip_pitch_joints = [2, 3, 4, 8, 9, 10] 
-        hip_knee_movement = np.sum(np.abs(action[knee_hip_pitch_joints]))
-        
+        # --- CONDITIONAL MOVEMENT REWARD/PENALTY ---
         # Measure disturbance magnitude from IMU sensors
         disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
         
-        # Threshold defining when a push/hit is happening
-        PUSH_THRESHOLD = 0.8 
+        # Calculate the total magnitude of the robot's joint actions
+        total_movement = np.sum(np.abs(action))
         
-        if disturbance > PUSH_THRESHOLD:
-            # 💥 HIT DETECTED: Reward reactive bending to absorb the shock!
-            flexion_reward = 3.0 * hip_knee_movement
+        # Threshold defining the boundary between "normal range" and "pushed"
+        STABILITY_THRESHOLD = 0.8 
+        
+        if disturbance > STABILITY_THRESHOLD:
+            # 💥 OUT OF RANGE (Pushed): Reward the robot for moving to compensate
+            reactive_reward = 2.5 * total_movement
         else:
-            # 🧍 STABLE: Penalize unnecessary joint movement to force a stiff, upright stand
-            flexion_reward = -1.5 * hip_knee_movement
+            # 🧍 NORMAL RANGE (Stable): Penalize the robot for twitching or moving unnecessarily
+            reactive_reward = -2.0 * total_movement
 
-        # --- HEAVIER ANTI-TWITCH & ADAPTIVE SMOOTHNESS PENALTY ---
+        # --- ADAPTIVE SMOOTHNESS PENALTY (Anti-Jitter) ---
         action_delta = action - self.previous_action
-        
-        # Measure disturbance magnitude from IMU sensors
-        disturbance = abs(accel_x) + abs(accel_y) + abs(gyro_roll) + abs(gyro_pitch)
-        
-        # Increased base weight from 120.0 to 300.0, and minimum floor from 10.0 to 40.0.
-        # This makes micro-twitching intensely expensive for the network to produce.
         dynamic_smoothness_weight = max(40.0, 300.0 - (disturbance * 50.0))
         smoothness_penalty = -dynamic_smoothness_weight * np.sum(np.square(action_delta))
         
         self.previous_action = np.copy(action)
         
         # Total reward calculation
-        reward = 5.0 + upright_reward + flexion_reward + energy_penalty + smoothness_penalty
+        reward = 5.0 + upright_reward + reactive_reward + smoothness_penalty
         
         # 1. Termination (Death by falling over)
         if self.current_step > 15:
