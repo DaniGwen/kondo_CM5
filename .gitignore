@@ -11,3 +11,4 @@ webots/checkpoints
 webots/*.zip
 webots/checkpoints_kondo_v2/kondo_td3_v2_50000_steps.zip
 webots/kondo_tensorboard_v2/TD3_0/events.out.tfevents.1792480524.legion5pro.18740.0
+webots/checkpoints_kondo_v2/*.zip
