@@ -1,127 +1,197 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cython')))
+"""Run an exported TD3 ONNX policy on the physical Kondo KHR-3HV.
 
+SAFETY: hardware movement is DISABLED by default. Before setting
+HARDWARE_CONTROL_ENABLED=True, verify the actual 14 unique RCB-4 channels,
+calibrated standing-pose commands, servo directions, sensor calibration, and
+joint limits. First run in dry-run mode and compare sensor features with Webots.
+
+The matching export_kondo_onnx.py exports outputs in the environment action units:
+12 leg offsets limited to +/-0.10 rad and two shoulder offsets limited to +/-0.20 rad.
+"""
+
+import os
+import sys
 import time
+from pathlib import Path
+
 import numpy as np
 import onnxruntime as ort
-from pykondo import Kondo
 
-session = ort.InferenceSession("kondo_balance.onnx")
+# Keep the repository layout used by the original script (script one folder
+# below the Kondo-KHR-3HV project root). Adjust if you place this elsewhere.
+PROJECT_CYTHON_PATH = Path(__file__).resolve().parent.parent / "cython"
+EXPLICIT_CYTHON_PATH = os.getenv("KONDO_CYTHON_PATH")
+if EXPLICIT_CYTHON_PATH:
+    sys.path.append(EXPLICIT_CYTHON_PATH)
+elif PROJECT_CYTHON_PATH.exists():
+    sys.path.append(str(PROJECT_CYTHON_PATH))
 
-kondo = Kondo()
-if kondo.init() < 0:
-    print("Failed to initialize RCB-4 connection.")
-    exit()
+from pykondo import Kondo  # noqa: E402
 
-print("Brain online. Commencing 14-joint balance control...")
+MODEL_PATH = os.getenv("KONDO_ONNX_MODEL", "kondo_balance_v2.onnx")
+CONTROL_PERIOD_SECONDS = 0.016
+HARDWARE_CONTROL_ENABLED = False  # Explicitly change only after hardware validation.
 
-# 14-joint servo mapping: 12 leg joints + 2 shoulders
-servo_ids = [
-    5, 6, 7, 8, 9, 10,  # Right Leg
-    5, 6, 7, 8, 9, 10,  # Left Leg
-    1, 1                # Right & Left Shoulders
+ACTION_COUNT = 14
+ACTION_LIMITS_RAD = np.array([0.10] * 12 + [0.20, 0.20], dtype=np.float32)
+ACTION_DELTA_LIMITS_RAD = np.array([0.03] * 12 + [0.04, 0.04], dtype=np.float32)
+SMOOTHING_ALPHA = 0.25
+RAMP_DURATION_FRAMES = 100
+SERVO_COMMAND_SPEED = 1.0  # Preserve the existing pykondo call convention; verify on hardware.
+
+# Fill these only after checking your actual RCB-4 channel map and calibrated stand.
+# Use 14 distinct channel IDs, in the same order as the policy joint list below.
+SERVO_IDS = []
+# Values must be absolute commands in degrees that create your calibrated stable stand.
+# Do NOT assume all-zero commands are a valid physical standing pose.
+STANDING_ANGLES_DEG = []
+
+# Physical analog-channel calibration retained from your original script.
+# These baselines and scales must be measured/confirmed for your robot.
+GYRO_PITCH_CHANNEL = 1
+GYRO_ROLL_CHANNEL = 2
+ACCEL_FORWARD_CHANNEL = 3
+ACCEL_LATERAL_CHANNEL = 4
+GYRO_BASELINE = 286.0
+ACCEL_FORWARD_BASELINE = 306.0
+ACCEL_LATERAL_BASELINE = 341.0
+GYRO_SCALE_RAD_S_PER_COUNT = 0.127
+ACCEL_FORWARD_SCALE_M_S2_PER_COUNT = 0.0493
+ACCEL_LATERAL_SCALE_M_S2_PER_COUNT = 0.0484
+
+JOINT_ORDER = [
+    "RightFemurHead1", "RightFemurHead2", "RightFemur", "RightCrus", "RightAnkle", "RightFoot",
+    "LeftFemurHead1", "LeftFemurHead2", "LeftFemur", "LeftCrus", "LeftAnkle", "LeftFoot",
+    "RightShoulder", "LeftShoulder",
 ]
 
-# Cached sensor values
-gyro_pitch = 286
-gyro_roll  = 286
-accel_z    = 306
-accel_y    = 341
 
-poll_counter = 0
-frame_count = 0
-ramp_duration_frames = 60 
+def read_analog_checked(kondo: Kondo, channel: int, label: str) -> float:
+    result = kondo.read_analog(channel)
+    if result is None or len(result) < 2 or result[0] < 0:
+        raise RuntimeError(f"Failed to read {label} from analog channel {channel}: {result!r}")
+    return float(result[1])
 
-previous_filtered_actions = None
-SMOOTHING_ALPHA = 0.25 
 
-while True:
+def validate_hardware_configuration() -> None:
+    if len(SERVO_IDS) != ACTION_COUNT:
+        raise RuntimeError("Set SERVO_IDS to the verified 14 physical RCB-4 channels before enabling movement.")
+    if len(set(SERVO_IDS)) != ACTION_COUNT:
+        raise RuntimeError("SERVO_IDS contains duplicates. Verify the physical channel mapping; independent joints need distinct channels.")
+    if len(STANDING_ANGLES_DEG) != ACTION_COUNT:
+        raise RuntimeError("Set 14 calibrated STANDING_ANGLES_DEG values before enabling movement.")
+    if not np.all(np.isfinite(np.asarray(STANDING_ANGLES_DEG, dtype=float))):
+        raise RuntimeError("STANDING_ANGLES_DEG contains non-finite values.")
+
+
+def main() -> None:
+    model_path = Path(MODEL_PATH)
+    if not model_path.is_file():
+        raise FileNotFoundError(f"ONNX model not found: {model_path.resolve()}. Run export_kondo_onnx.py first.")
+
+    session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    inputs = session.get_inputs()
+    outputs = session.get_outputs()
+    if len(inputs) != 1 or len(outputs) < 1:
+        raise RuntimeError(f"Expected one model input and at least one output; got {len(inputs)} inputs, {len(outputs)} outputs.")
+    input_name = inputs[0].name
+    output_name = outputs[0].name
+    expected_shape = inputs[0].shape
+    if expected_shape and isinstance(expected_shape[-1], int) and expected_shape[-1] != 6:
+        raise RuntimeError(f"Expected a 6-feature ONNX input, found shape {expected_shape}.")
+
+    if HARDWARE_CONTROL_ENABLED:
+        validate_hardware_configuration()
+    else:
+        print("DRY RUN: policy inference is enabled, but no servo commands will be sent.", flush=True)
+
+    kondo = Kondo()
+    if kondo.init() < 0:
+        raise RuntimeError("Failed to initialize RCB-4 connection.")
+
+    print(f"Policy loaded: {model_path}; input={input_name!r}; output={output_name!r}", flush=True)
+    print("Observation order: [forward_accel, lateral_accel, 9.81, roll_rate, pitch_rate, 0.0]", flush=True)
+    if HARDWARE_CONTROL_ENABLED:
+        print("HARDWARE CONTROL ENABLED. Keep physical support and emergency stop available.", flush=True)
+
+    previous_applied = np.zeros(ACTION_COUNT, dtype=np.float32)
+    frame_count = 0
+    loop_count = 0
     start_time = time.perf_counter()
 
-    # --- A. Round-Robin Sensor Polling ---
     try:
-        current_sensor = poll_counter % 4
-        if current_sensor == 0:
-            res = kondo.read_analog(1)
-            if res and res[0] >= 0: gyro_pitch = res[1]
-        elif current_sensor == 1:
-            res = kondo.read_analog(2)
-            if res and res[0] >= 0: gyro_roll = res[1]
-        elif current_sensor == 2:
-            res = kondo.read_analog(3)
-            if res and res[0] >= 0: accel_z = res[1]
-        elif current_sensor == 3:
-            res = kondo.read_analog(4)
-            if res and res[0] >= 0: accel_y = res[1]
-        poll_counter += 1
-    except Exception:
-        pass
+        while True:
+            loop_start = time.perf_counter()
 
-    # Physical sensor conversions
-    gyro_pitch_rads = (gyro_pitch - 286) * 0.127  
-    gyro_roll_rads  = (gyro_roll - 286) * 0.127
-    accel_z_ms2 = (accel_z - 306) * 0.0493
-    accel_y_ms2 = (accel_y - 341) * 0.0484
+            # Read all channels once in each control iteration rather than mixing
+            # four differently aged round-robin readings into one observation.
+            gyro_pitch_raw = read_analog_checked(kondo, GYRO_PITCH_CHANNEL, "gyro pitch")
+            gyro_roll_raw = read_analog_checked(kondo, GYRO_ROLL_CHANNEL, "gyro roll")
+            accel_forward_raw = read_analog_checked(kondo, ACCEL_FORWARD_CHANNEL, "forward acceleration")
+            accel_lateral_raw = read_analog_checked(kondo, ACCEL_LATERAL_CHANNEL, "lateral acceleration")
 
-    # Pack observation (6 floats)
-    imu_state = np.array([[accel_z_ms2, accel_y_ms2, 9.81, gyro_roll_rads, gyro_pitch_rads, 0.0]], dtype=np.float32)
+            gyro_pitch = (gyro_pitch_raw - GYRO_BASELINE) * GYRO_SCALE_RAD_S_PER_COUNT
+            gyro_roll = (gyro_roll_raw - GYRO_BASELINE) * GYRO_SCALE_RAD_S_PER_COUNT
+            accel_forward = (accel_forward_raw - ACCEL_FORWARD_BASELINE) * ACCEL_FORWARD_SCALE_M_S2_PER_COUNT
+            accel_lateral = (accel_lateral_raw - ACCEL_LATERAL_BASELINE) * ACCEL_LATERAL_SCALE_M_S2_PER_COUNT
 
-    # --- B. Inference ---
-    raw_actions = session.run(["joint_actions"], {"imu_state": imu_state})[0][0]
+            # Must match kondo_tcp_server.py's six training features, including
+            # constant placeholders for vertical acceleration and yaw rate.
+            obs = np.asarray(
+                [accel_forward, accel_lateral, 9.81, gyro_roll, gyro_pitch, 0.0],
+                dtype=np.float32,
+            )
+            model_actions = session.run([output_name], {input_name: obs.reshape(1, 6)})[0]
+            raw_actions = np.asarray(model_actions, dtype=np.float32).reshape(-1)
+            if raw_actions.size != ACTION_COUNT or not np.all(np.isfinite(raw_actions)):
+                raise RuntimeError(f"Invalid ONNX action output; expected {ACTION_COUNT} finite values, got shape {model_actions.shape}.")
 
-    # --- C. Action Filtering ---
-    if previous_filtered_actions is None:
-        previous_filtered_actions = np.copy(raw_actions)
+            # The supplied export wrapper returns environment action units (radians).
+            raw_actions = np.clip(raw_actions, -ACTION_LIMITS_RAD, ACTION_LIMITS_RAD)
+            if frame_count < RAMP_DURATION_FRAMES:
+                ramp_factor = float(frame_count + 1) / float(RAMP_DURATION_FRAMES)
+                frame_count += 1
+                raw_actions = raw_actions * ramp_factor
 
-    filtered_actions = (SMOOTHING_ALPHA * raw_actions) + ((1.0 - SMOOTHING_ALPHA) * previous_filtered_actions)
-    previous_filtered_actions = np.copy(filtered_actions)
+            smoothed = SMOOTHING_ALPHA * raw_actions + (1.0 - SMOOTHING_ALPHA) * previous_applied
+            delta = np.clip(smoothed - previous_applied, -ACTION_DELTA_LIMITS_RAD, ACTION_DELTA_LIMITS_RAD)
+            applied_actions = (previous_applied + delta).astype(np.float32)
+            previous_applied = applied_actions.copy()
 
-    # Soft-start ramp factor
-    if frame_count < ramp_duration_frames:
-        ramp_factor = float(frame_count) / float(ramp_duration_frames)
-        frame_count += 1
-    else:
-        ramp_factor = 1.0
+            if HARDWARE_CONTROL_ENABLED:
+                target_angles_deg = (
+                    np.asarray(STANDING_ANGLES_DEG, dtype=np.float32)
+                    + np.rad2deg(applied_actions)
+                ).tolist()
+                kondo.set_angles(SERVO_IDS, target_angles_deg, SERVO_COMMAND_SPEED)
 
-    # --- D. Sagittal Reflex Bias ---
-    ACCEL_THRESHOLD = 1.5
-    reflex_bias = [0.0] * len(filtered_actions)
+            loop_count += 1
+            if loop_count % 30 == 0:
+                elapsed = time.perf_counter() - loop_start
+                print(
+                    f"loop={loop_count} elapsed={elapsed * 1000.0:.1f} ms "
+                    f"features={np.round(obs, 3).tolist()} "
+                    f"max_offset={np.max(np.abs(applied_actions)):.4f} rad "
+                    f"mode={'CONTROL' if HARDWARE_CONTROL_ENABLED else 'DRY-RUN'}",
+                    flush=True,
+                )
 
-    if abs(accel_y_ms2) > ACCEL_THRESHOLD:
-        direction = 1.0 if accel_y_ms2 > 0 else -1.0
-        intensity = min(1.0, (abs(accel_y_ms2) - ACCEL_THRESHOLD) / 8.0)
+            elapsed = time.perf_counter() - loop_start
+            if elapsed < CONTROL_PERIOD_SECONDS:
+                time.sleep(CONTROL_PERIOD_SECONDS - elapsed)
+            elif loop_count % 30 == 0:
+                print("Warning: sensor reads/inference exceeded the 16 ms target; actual loop is slower.", flush=True)
 
-        rad_15 = 0.262 * direction * intensity
-        rad_10 = 0.175 * direction * intensity
-        rad_5  = 0.087 * direction * intensity
+    except KeyboardInterrupt:
+        print("Stopped by user. Check the robot's physical state before approaching.", flush=True)
+    except Exception as exc:
+        print(f"Balance loop stopped due to error: {exc}", flush=True)
+        if HARDWARE_CONTROL_ENABLED:
+            print("No further policy commands will be sent. Use the robot's normal safe stop procedure.", flush=True)
+        raise
+    finally:
+        print(f"Elapsed wall time: {time.perf_counter() - start_time:.1f} s", flush=True)
 
-        # Shoulders (ID 1)
-        reflex_bias[12] = rad_15
-        reflex_bias[13] = rad_15
 
-        # Hips (ID 7)
-        reflex_bias[2] = rad_10
-        reflex_bias[8] = rad_10
-
-        # Knees (ID 8) - bends backward
-        reflex_bias[3] = -rad_5
-        reflex_bias[9] = -rad_5
-
-        # Ankles (ID 9)
-        reflex_bias[4] = rad_10
-        reflex_bias[10] = rad_10
-
-    # Combine with EMA actions, scale through soft-start, and dispatch to RCB-4
-    target_angles = []
-    for i in range(len(filtered_actions)):
-        total_action = (filtered_actions[i] + reflex_bias[i]) * ramp_factor
-        degrees = total_action * 57.2958
-        target_angles.append(degrees)
-
-    kondo.set_angles(servo_ids[:len(filtered_actions)], target_angles, 1.0) 
-
-    # --- F. Loop Rate Maintenance (16ms) ---
-    elapsed = time.perf_counter() - start_time
-    if elapsed < 0.016:
-        time.sleep(0.016 - elapsed)
+if __name__ == "__main__":
+    main()
