@@ -27,6 +27,7 @@ elif PROJECT_CYTHON_PATH.exists():
     sys.path.append(str(PROJECT_CYTHON_PATH))
 
 from pykondo import Kondo  # noqa: E402
+from shoulder_filter import filter_shoulders, SHOULDER_NEUTRAL_DEADBAND_RAD, SHOULDER_CHANGE_THRESHOLD_RAD
 
 MODEL_PATH = os.getenv("KONDO_ONNX_MODEL", "kondo_balance_v2.onnx")
 CONTROL_PERIOD_SECONDS = 0.016
@@ -110,6 +111,8 @@ def main() -> None:
         raise RuntimeError("Failed to initialize RCB-4 connection.")
 
     print(f"Policy loaded: {model_path}; input={input_name!r}; output={output_name!r}", flush=True)
+    print(f"Shoulder filter: neutral deadband={SHOULDER_NEUTRAL_DEADBAND_RAD:.4f} rad, "
+          f"command threshold={SHOULDER_CHANGE_THRESHOLD_RAD:.4f} rad", flush=True)
     print("Observation order: [forward_accel, lateral_accel, 9.81, roll_rate, pitch_rate, 0.0]", flush=True)
     if HARDWARE_CONTROL_ENABLED:
         print("HARDWARE CONTROL ENABLED. Keep physical support and emergency stop available.", flush=True)
@@ -156,6 +159,8 @@ def main() -> None:
             smoothed = SMOOTHING_ALPHA * raw_actions + (1.0 - SMOOTHING_ALPHA) * previous_applied
             delta = np.clip(smoothed - previous_applied, -ACTION_DELTA_LIMITS_RAD, ACTION_DELTA_LIMITS_RAD)
             applied_actions = (previous_applied + delta).astype(np.float32)
+            # Same shoulder-only deadband/change threshold as Webots training.
+            applied_actions = filter_shoulders(applied_actions, previous_applied)
             previous_applied = applied_actions.copy()
 
             if HARDWARE_CONTROL_ENABLED:
