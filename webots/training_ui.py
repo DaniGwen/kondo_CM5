@@ -20,7 +20,7 @@ TOKEN = secrets.token_urlsafe(24)
 LOCK = threading.Lock()
 PENDING = None
 DOCS = {'model': 'CORRECTED_MODEL.md', 'stepping': 'TD3_STEPPING_V3.md',
-        'observations': 'OBSERVATION_V2.md', 'launcher': 'TRAINING_UI.md', 'new-world': 'CORRECTED_ROBOT.md'}
+        'observations': 'OBSERVATION_V2.md', 'launcher': 'TRAINING_UI.md', 'new-world': 'CORRECTED_ROBOT.md', 'export': 'ROBOT_EXPORT.md'}
 
 
 def validate_config(data):
@@ -136,6 +136,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond((HERE / 'training_ui.html').read_text(encoding='utf-8').replace('__TOKEN__', TOKEN), 'text/html')
         if self.path == '/api/status':
             return self.respond(status())
+        if self.path == '/api/export-candidates':
+            from export_readiness import candidates
+            return self.respond({'candidates': candidates(RUNS)})
+        if self.path.startswith('/api/download/'):
+            name = self.path.removeprefix('/api/download/')
+            if re.fullmatch(r'export_[0-9]{8}_[0-9]{6}_[0-9a-f]{6}\.zip', name):
+                path = HERE / 'exports' / name
+                if path.is_file():
+                    data = path.read_bytes()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/zip')
+                    self.send_header('Content-Disposition', 'attachment; filename="' + name + '"')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.end_headers()
+                    return self.wfile.write(data)
+            return self.respond({'error':'Package not found'}, code=404)
         if self.path.startswith('/api/docs/'):
             key = self.path.removeprefix('/api/docs/')
             if key in DOCS:
@@ -151,6 +167,29 @@ class Handler(BaseHTTPRequestHandler):
             if length > 10000:
                 raise ValueError('Request too large')
             data = json.loads(self.rfile.read(length) or '{}')
+            if self.path == '/api/export':
+                name = data.get('run', '')
+                if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,99}', name):
+                    raise ValueError('Select a recorded run')
+                run = RUNS / name
+                if not (run / 'best_model.zip').is_file():
+                    raise ValueError('Best checkpoint is not available')
+                hardware = data.get('hardware') is True
+                if hardware:
+                    from export_readiness import assess
+                    readiness = assess(run)
+                    if not readiness['hardware_ready']:
+                        raise ValueError('Hardware export blocked: ' + ' '.join(readiness['blockers']))
+                command = [sys.executable, str(HERE / 'create_robot_export.py'), '--run', str(run), '--output-root', str(HERE / 'exports')]
+                if hardware:
+                    command.append('--hardware')
+                completed = subprocess.run(command, cwd=HERE, capture_output=True, text=True, timeout=120,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                if completed.returncode:
+                    raise ValueError('Export failed. ' + completed.stderr[-1600:])
+                result = json.loads(completed.stdout.splitlines()[-1])
+                result['download'] = '/api/download/' + result['filename']
+                return self.respond(result)
             with LOCK:
                 if self.path == '/api/start':
                     config = validate_config(data)
@@ -175,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
                     (RUNS / current['run'] / 'STOP').touch()
                     return self.respond({'message': 'Stop requested. Waiting for evaluation and model/replay saving.'})
             self.respond({'error': 'Not found'}, code=404)
-        except (ValueError, OSError, TypeError) as exc:
+        except (ValueError, OSError, TypeError, subprocess.TimeoutExpired) as exc:
             self.respond({'error': str(exc)}, code=400)
 
     def log_message(self, *args):
